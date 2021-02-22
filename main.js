@@ -4,10 +4,13 @@ let InnerExecution;
 let banner;
 let complete;
 
+window.Comlink = Comlink;
+
 async function init(){
-    const worker = new Worker("worker.js");   
+    const worker = new Worker("worker.js");
     const wrapper = Comlink.wrap(worker);
     ({pyodide, InnerExecution, banner, complete} = await wrapper());
+    wrapper[Comlink.releaseProxy]();
     banner = "Welcome to the Pyodide terminal emulator 🐍\n" + await banner;
     window.pyodide = pyodide;
 }
@@ -18,9 +21,7 @@ class Execution {
         return (async () => {
             await ready;
             this._inner = await new InnerExecution(code);
-            this._result = this._inner.result().finally(() => {
-                // clean up
-            });
+            this._result = this._inner.result();
             this._validate_syntax = this._inner.validate_syntax()
             this._interrupt_buffer = await this._inner.interrupt_buffer();
             return this;
