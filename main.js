@@ -1,17 +1,15 @@
 import * as Comlink from "https://unpkg.com/comlink/dist/esm/comlink.mjs";
 let pyodide;
 let InnerExecution;
-let Test;
 let banner;
 let complete;
 
 async function init(){
     const worker = new Worker("worker.js");   
     const wrapper = Comlink.wrap(worker);
-    ({pyodide, InnerExecution, Test, banner, complete} = await wrapper());
+    ({pyodide, InnerExecution, banner, complete} = await wrapper());
     banner = "Welcome to the Pyodide terminal emulator 🐍\n" + await banner;
     window.pyodide = pyodide;
-    window.Test = Test;
 }
 let ready = init();
 
@@ -27,10 +25,6 @@ class Execution {
             this._interrupt_buffer = await this._inner.interrupt_buffer();
             return this;
         })();
-    }
-
-    test1(){
-        this._inner.test1();
     }
 
     start(){
@@ -77,7 +71,6 @@ class StdinReader {
     async _read(n){
         try {
             let text = await this._readCallback(n);
-            console.log("hi?");
             // encodeInto apparently doesn't work with SAB...
             let bytes = encoder.encode(text);
             this._size[0] = bytes.length;

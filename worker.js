@@ -40,7 +40,6 @@ def pycomplete(source):
     match = match_nonwhite_space.search(revsource)
     if match:
         source = source[:-match.end()]
-    console.log("source", source)
     completer.complete(source, 0)
     return completer.matches
     
@@ -170,7 +169,6 @@ class InnerExecution {
             );
         } catch(e){
             this._validate_syntax.reject(pyodide.globals.repr(e.pythonError));
-            console.log(e);
             let msg = format_exception(e.pythonError);
             throw new Error(msg);
         } finally {
@@ -204,19 +202,6 @@ class InnerExecution {
     }
 }
 
-class Test {
-    constructor(code){
-        this._buffer = new Int32Array(new SharedArrayBuffer(4));
-    }
-
-    buffer(){
-        return Comlink.transfer(this._buffer);
-    }
-
-    get_value(){
-        Atomics.wait(this._buffer, 0);
-    }
-}
 
 async function init(){
     await languagePluginLoader;
@@ -224,7 +209,6 @@ async function init(){
     return Comlink.proxy({ 
         InnerExecution, 
         pyodide,
-        Test,
         banner,
         complete
     });
