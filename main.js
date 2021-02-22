@@ -24,11 +24,13 @@ class Execution {
             this._result = this._inner.result();
             this._validate_syntax = this._inner.validate_syntax()
             this._interrupt_buffer = await this._inner.interrupt_buffer();
+            this._started = false;
             return this;
         })();
     }
 
     start(){
+        this._started = true;
         this._inner.start();
     }
 
@@ -45,14 +47,23 @@ class Execution {
     }
 
     async onStdin(callback){
+        if(this._started){
+            throw new Error("Cannot set standard in callback after starting the execution.");
+        }
         await this._inner.setStdin(Comlink.proxy(new StdinReader(callback)));
     }
 
     async onStdout(callback){
+        if(this._started){
+            throw new Error("Cannot set standard out callback after starting the execution.");
+        }
         await this._inner.onStdout(Comlink.proxy(callback));
     }
 
     async onStderr(callback){
+        if(this._started){
+            throw new Error("Cannot set standard error callback after starting the execution.");
+        }
         await this._inner.onStderr(Comlink.proxy(callback));
     }
 }
