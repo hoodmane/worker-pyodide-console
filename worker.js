@@ -102,13 +102,12 @@ function promiseHandles(){
 }
 
 function initializePyodide() {
-    // let namespace = pyodide.pyimport("dict")();
-    let namespace = pyodide.globals;
+    let namespace = pyodide.pyimport("dict")();
     pyodide.pyodide_py.eval_code(mainPythonCode, namespace);
     for(let name of ["exec_code", "format_exception", "banner", "pycomplete"]){
         self[name] = namespace[name];        
     }
-    // namespace.destroy();
+    namespace.destroy();
 }
 
 function complete(value){
