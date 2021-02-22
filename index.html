@@ -1,0 +1,138 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <script src="https://code.jquery.com/jquery-latest.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jquery.terminal/js/jquery.terminal.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jquery.terminal/js/echo_newline.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/jquery.terminal/css/jquery.terminal.min.css" rel="stylesheet"/>
+    <style>
+      .terminal { --size: 1.5; }
+    </style>
+  </head>
+  <body style="background: black; margin:0;">
+    <div id="term" style="min-height: 100vh;"></div>
+    <script type="module">
+    import {Execution, ready, pyodide, banner, complete} from "./main.js";
+    window.Execution = Execution;
+    window.pyodide = pyodide;
+    function sleep(t){
+      return new Promise(resolve => setTimeout(resolve, t));
+    }
+
+    function process_stream_write(s){
+        let newline = s.endsWith("\n");
+        if(newline){
+            s = s.slice(0, -1);
+        }
+        return [s, newline];
+    }
+
+    (async () => {
+      await ready;
+      let ps1 = '>>> ', ps2 = '... ';
+      let reading_stdin = false;
+      let current_execution = undefined;
+      let last_stdout = "";
+
+      let term = $('div').terminal(
+        (command) => {},
+        {
+          prompt: ps1,
+          greetings: banner,
+          completionEscape: false,
+          completion: async function(command) {
+            return await complete(command);
+          },
+          keypress : (e) => {
+            let suppress_key = current_execution && !reading_stdin;
+            let ctrls =  e.ctrlKey && (e.key === "C" || e.key === "D");
+            suppress_key &&= !ctrls;
+            return suppress_key ? false : undefined;
+          },
+          keydown : (e) => {
+            let suppress_key = current_execution && !reading_stdin;
+            let ctrls =  e.ctrlKey && (e.key === "C" || e.key === "D");
+            suppress_key &&= !ctrls;
+            return suppress_key ? false : undefined;
+          },
+          keymap: {
+            "CTRL+C" : function(event, original){
+              console.log(current_execution);
+              if(!reading_stdin && current_execution){
+                current_execution.keyboardInterrupt();
+              }
+              original();
+            },
+            "CTRL+A" : function(event, original){
+              console.log("hi?");
+            },
+            ENTER: async function(event, original) { 
+              if(reading_stdin){
+                original();
+                return;
+              }
+              try {
+                let e = await new Execution(term.get_command());
+                current_execution = e;
+                term.set_prompt(""); // For reading from stdin, 
+                await e.onStdin(async () => {
+                    term.resume();
+                    reading_stdin = true;
+                    try {
+                      return await term.read(last_stdout);
+                    } finally {
+                      term.set_prompt(ps1);
+                      await sleep(0);
+                      term.set_prompt("");
+                      reading_stdin = false;
+                    }
+                });
+                await e.onStdout(async (text) => {
+                  last_stdout = text;
+                  term.echo(text, {newline : false});
+                });
+                await e.onStderr(async (text) => {
+                    term.error(text, {newline : false});
+                });
+                e.start();
+                try {
+                  await e.validate_syntax();
+                } catch(e) {
+                  term.error(e);
+                  return;
+                }
+                await original();
+                let result
+                try {
+                  result = await e.result();
+                } catch(e){
+                  term.error(e);
+                  return;
+                }
+                if(result){
+                  term.echo(result  + "\n");
+                }
+              } finally {
+                term.set_prompt(ps1);
+                current_execution = undefined;
+              }
+            }
+          }
+        });
+        window.term = term;
+
+        // await sleep(10);
+        // let cmd = document.querySelector(".cmd");
+        // let wrapper = document.createElement("div");
+        // wrapper.style.display = "flex";
+        // wrapper.style.flexDirection = "row";
+        // cmd.parentElement.replaceChild(wrapper, cmd);
+        // let promptDiv = document.createElement("div");
+        // promptDiv.innerText = ">>>";
+        // wrapper.appendChild(promptDiv);
+        // wrapper.appendChild(cmd);
+    })();
+    </script>
+  </body>
+</html>
