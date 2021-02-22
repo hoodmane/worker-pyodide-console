@@ -77,14 +77,15 @@ class StdinReader {
     async _read(n){
         try {
             let text = await this._readCallback(n);
+            console.log("hi?");
             // encodeInto apparently doesn't work with SAB...
             let bytes = encoder.encode(text);
             this._size[0] = bytes.length;
             this._buffer.set(bytes);
             Atomics.notify(this._size, 0);
         } catch(e){
-            console.warn(e);
-            throw e;
+            this._size[0] = -1;
+            Atomics.notify(this._size, 0);
         }
     }
 }

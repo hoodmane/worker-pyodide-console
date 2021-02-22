@@ -3,6 +3,7 @@ from pyodide._base import CodeRunner
 from contextlib import redirect_stdout, redirect_stderr, contextmanager, _RedirectStream
 from asyncio import iscoroutine
 from pyodide.console import repr_shorten, InteractiveConsole
+from pyodide import JsException
 from js import console, sleep
 import __main__
 import ast
@@ -19,9 +20,11 @@ class ReadStream:
         self.read_handler = read_handler
 
     def readline(self, n = -1):
-        result = self.read_handler()
-        print(result)
-        return result
+        try:
+            return self.read_handler()
+        except JsException:
+            raise KeyboardInterrupt from None
+
 
 class redirect_stdin(_RedirectStream):
     _stream = "stdin"
@@ -128,6 +131,9 @@ class InnerStdinReader {
         this.outer_reader._read(n);
         Atomics.wait(this._size, 0);
         let size = this._size[0];
+        if(size === -1){
+            throw new Error("Stdin Cancelled");
+        }
         // Can't use subarray, "the provided ArrayBufferView value must not be shared."
         return decoder.decode(this._buffer.slice(0, size));
     }

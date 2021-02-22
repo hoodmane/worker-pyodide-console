@@ -34,6 +34,7 @@
       let ps1 = '>>> ', ps2 = '... ';
       let reading_stdin = false;
       let current_execution = undefined;
+      let stdin_cancellation_token = undefined;
       let last_stdout = "";
 
       let term = $('div').terminal(
@@ -48,25 +49,27 @@
           keypress : (e) => {
             let suppress_key = current_execution && !reading_stdin;
             let ctrls =  e.ctrlKey && (e.key === "C" || e.key === "D");
+            if(ctrls && stdin_cancellation_token){
+              stdin_cancellation_token();
+            }
             suppress_key &&= !ctrls;
             return suppress_key ? false : undefined;
           },
           keydown : (e) => {
             let suppress_key = current_execution && !reading_stdin;
             let ctrls =  e.ctrlKey && (e.key === "C" || e.key === "D");
+            if(ctrls && stdin_cancellation_token){
+              stdin_cancellation_token();
+            }
             suppress_key &&= !ctrls;
             return suppress_key ? false : undefined;
           },
           keymap: {
             "CTRL+C" : function(event, original){
-              console.log(current_execution);
               if(!reading_stdin && current_execution){
                 current_execution.keyboardInterrupt();
               }
               original();
-            },
-            "CTRL+A" : function(event, original){
-              console.log("hi?");
             },
             ENTER: async function(event, original) { 
               if(reading_stdin){
@@ -81,8 +84,10 @@
                     term.resume();
                     reading_stdin = true;
                     try {
-                      return await term.read(last_stdout);
+                      let cancelled = new Promise((resolve, reject) => stdin_cancellation_token = reject);
+                      return await Promise.race([term.read(last_stdout), cancelled]);
                     } finally {
+                      stdin_cancellation_token = undefined;
                       term.set_prompt(ps1);
                       await sleep(0);
                       term.set_prompt("");
