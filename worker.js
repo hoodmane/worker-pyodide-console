@@ -1,6 +1,6 @@
-importScripts("https://unpkg.com/comlink/dist/umd/comlink.js");
-self.languagePluginUrl = 'https://pyodide-cdn2.iodide.io/dev/full/pyodide.js'
-importScripts(`https://pyodide-cdn2.iodide.io/dev/full/pyodide.js`);
+importScripts("https://cdn.jsdelivr.net/npm/comlink");
+self.languagePluginUrl = 'https://cdn.jsdelivr.net/pyodide/dev/full/pyodide.js';
+importScripts('https://cdn.jsdelivr.net/pyodide/dev/full/pyodide.js');
 let fetchPythonCode = fetch("code.py");
 
 function sleep(t){

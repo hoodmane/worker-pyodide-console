@@ -4,8 +4,6 @@ let InnerExecution;
 let banner;
 let complete;
 
-window.Comlink = Comlink;
-
 async function init(){
     const worker = new Worker("worker.js");
     const wrapper = Comlink.wrap(worker);
