@@ -58,6 +58,26 @@ class InnerStdinReader {
     }
 }
 
+function processTraceback(e){
+    let msgSplit = e.message.split("\n");
+    
+    let topIndex = 1;
+    let bottomIndex = undefined;
+    for(let [idx, value] of msgSplit.entries()){
+        if(value.startsWith("Traceback")){
+            // Reset the range of frames that we're deleting
+            topIndex = idx + 1;
+            bottomIndex = undefined;
+        }
+        if(value.search("<console>") > 0 || value.search("<unknown>") > 0){
+            bottomIndex ??= idx;
+        }
+    }
+    msgSplit.splice(topIndex, bottomIndex - topIndex);
+    let result = msgSplit.join("\n");
+    return result;
+}
+
 class InnerExecution {
     constructor(code){
         this._code = code;
@@ -94,9 +114,9 @@ class InnerExecution {
                 this._stderr_callback
             );
         } catch(e){
-            this._validate_syntax.reject(pyodide.globals.repr(e.pythonError));
-            let msg = format_exception(e.pythonError);
-            throw new Error(msg);
+            let err = new Error(processTraceback(e));
+            this._validate_syntax.reject(err);
+            throw err;
         } finally {
             pyodide.setInterruptBuffer();
         }
