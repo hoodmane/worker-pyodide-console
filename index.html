@@ -8,11 +8,47 @@
     <link href="https://cdn.jsdelivr.net/npm/jquery.terminal/css/jquery.terminal.min.css" rel="stylesheet"/>
     <script src="https://cdn.jsdelivr.net/npm/jquery.terminal/js/echo_newline.js"></script>
     <style>
-      .terminal { --size: 1.5; }
+      :root {
+        --size: 1.5; 
+        --background: transparent;
+      }
+      [data-index], .cmd-wrapper {
+        margin-left: 4ch;
+      }
+      .terminal { 
+        /* 20pt is the total amount of vertical padding */
+        min-height: calc(100vh - 20pt); 
+        flex-grow: 1;
+        margin-left: -4ch;
+        padding: 0;
+        padding-bottom: 20vh;
+      }
+      .console-wrapper {
+        display: flex; 
+        flex-direction: row;
+        padding: 10pt;
+      }
+      .cmd-line {
+        margin-left : -4ch;
+      }
+      .console-prompt-margin {
+        z-index: -1;
+        width: 4ch; 
+        /* background-color: brown; */
+        /*pointer-events: none;
+        user-select: none;*/
+        /* position: unset; */
+        display: flex;
+        flex-direction: column;
+      }
     </style>
   </head>
   <body style="background: black; margin:0;">
-    <div id="term" style="min-height: 100vh;"></div>
+    <div class="console-wrapper">
+      <div class="console-prompt-margin cmd">
+      </div>
+      <div class="terminal"></div>
+    </div>
     <script type="module">
     import {Execution, ready, pyodide, banner, complete} from "./main.js";
     window.Execution = Execution;
@@ -29,103 +65,243 @@
         return [s, newline];
     }
 
+    let is_output = false;
+    let reading_stdin = false;
+    let current_execution = undefined;
+    let last_stdout = "";
+    let data_index = 0;
+    let revsearch_active = false;
+
+    let ps1 = '>>> ', ps2 = '... ';
+   
+    let promptMargin = document.querySelector(".console-prompt-margin");
+    let consoleWrapper = document.querySelector(".console-wrapper");
+
+    function clearPrompts(){
+      for(let node of promptMargin.querySelectorAll(".input")){
+        node.remove();
+      }
+    }
+
+    function addSpanOnLevelWith(node, text){
+      let top = node.getBoundingClientRect().top;
+      let span = document.createElement("span");
+      let term_top = consoleWrapper.querySelector("[data-index='0']").getBoundingClientRect().top;
+      span.style.top = `${top - term_top}px`;
+      span.style.position = "absolute";
+      span.innerText = text;
+      span.className = "input";
+      promptMargin.appendChild(span);
+    }
+    window.addSpanOnLevelWith = addSpanOnLevelWith;
+
+    function updatePrompts(){
+      clearPrompts();
+      let promptText = ps1;
+      for(let node of consoleWrapper.querySelectorAll(".cmd-wrapper div")){
+        addSpanOnLevelWith(node, promptText);
+        promptText = ps2;
+      }
+    }
+
+    function commit_prompts(){
+      for(let node of promptMargin.querySelectorAll(".input")){
+        node.className = "";
+      }
+    }
+
+    function flushConsole(){
+      if(consoleWrapper.querySelector(".cmd-prompt").innerText){
+        term.echo("");
+      }
+    }
+
+    function isReverseSearchActive(){
+      let child = document.querySelector(".cmd-prompt").children[0];
+      if(!child) {
+        return false;
+      }
+      return child.innerText.search("reverse-i-search") !== -1;
+    }
+
+    let inputObserver = new MutationObserver(async (mutationsList) => {
+      let cmd = term.get_command();
+      if(cmd === ""){
+        await sleep(10);
+      }
+      if(current_execution || revsearch_active){
+        return;
+      }
+      updatePrompts();
+    });
+
+    let outputObserver = new MutationObserver((mutationsList) => {
+      for(let mutation of mutationsList){
+        if(is_output){
+          mutation.addedNodes[0].style.marginLeft = "0ch";
+        }
+      }
+    });
+
+    let cmdPromptObserver = new MutationObserver(async (mutationsList) => {
+      
+      let hasPrompt = false;
+      for(let node of consoleWrapper.querySelector(".cmd-prompt").children){
+        hasPrompt ||= node.innerText.trim() !== "";
+      }
+      let cmdWrapper = consoleWrapper.querySelector(".cmd-wrapper");
+      cmdWrapper.style.marginLeft = hasPrompt ? "0ch" : "4ch";
+      if(hasPrompt || revsearch_active){
+        await sleep(10);
+        clearPrompts();
+      } else {
+        updatePrompts();
+      }
+    });
+
     (async () => {
       await ready;
-      let ps1 = '>>> ', ps2 = '... ';
-      let reading_stdin = false;
-      let current_execution = undefined;
-      let stdin_cancellation_token = undefined;
-      let last_stdout = "";
 
-      let term = $('div').terminal(
+      let term = $('.terminal').terminal(
         (command) => {},
         {
-          prompt: ps1,
+          prompt: "",
           greetings: banner,
           completionEscape: false,
           completion: async function(command) {
             return await complete(command);
           },
+          historyFilter : true,
           keypress : (e) => {
             let suppress_key = current_execution && !reading_stdin;
-            let ctrls =  e.ctrlKey && (e.key === "C" || e.key === "D");
-            if(ctrls && stdin_cancellation_token){
-              stdin_cancellation_token();
-            }
+            let ctrls =  e.ctrlKey && (e.key === "C");
             suppress_key &&= !ctrls;
+            // Delay here needs to be long enough to get through the if(revsearch_active) clause
+            // in the ENTER handler.
+            sleep(30).then(() => { 
+                let oldrevsearch_active = revsearch_active;
+                revsearch_active = isReverseSearchActive();
+                // if(oldrevsearch_active && !revsearch_active){
+                //   updatePrompts();
+                // }
+            });
             return suppress_key ? false : undefined;
           },
           keydown : (e) => {
             let suppress_key = current_execution && !reading_stdin;
-            let ctrls =  e.ctrlKey && (e.key === "C" || e.key === "D");
-            if(ctrls && stdin_cancellation_token){
-              stdin_cancellation_token();
-            }
+            let ctrls =  e.ctrlKey && (e.key === "C");
             suppress_key &&= !ctrls;
             return suppress_key ? false : undefined;
           },
           keymap: {
-            "CTRL+C" : function(event, original){
+            "CTRL+D" : async function(event, original){
+              if(reading_stdin){
+                term.pop();
+                return true;
+              }
+            },
+            "CTRL+C" : async function(event, original){
+              if(reading_stdin){
+                term.pop();
+                return true;
+              }
               if(!reading_stdin && current_execution){
                 current_execution.keyboardInterrupt();
               }
+              if(isReverseSearchActive()){
+                return true;
+              }
+
               original();
+              await sleep(10);
+              commit_prompts();
+              updatePrompts();
             },
             ENTER: async function(event, original) { 
+              let cmd = term.get_command();
+              if(revsearch_active){
+                await sleep(10);
+                let data = document.querySelectorAll("[data-index]");
+                let lastData = data[data.length - 1];
+                let promptText = ps1;
+                await sleep(10);
+                for(let node of lastData.children){
+                  addSpanOnLevelWith(node, promptText);
+                  promptText = ps2;
+                }
+              }
+              // await sleep(0);
               if(reading_stdin){
                 original();
                 return;
               }
+              commit_prompts();
+              let result = undefined;
               try {
-                let e = await new Execution(term.get_command());
+                term.history().append(cmd);
+                term.set_command("");
+                let e = await new Execution(cmd);
                 current_execution = e;
-                term.set_prompt(""); // For reading from stdin, 
+                await sleep(10);
+                is_output = true;
                 await e.onStdin(async () => {
                     term.resume();
                     reading_stdin = true;
                     try {
-                      let cancelled = new Promise((resolve, reject) => stdin_cancellation_token = reject);
-                      return await Promise.race([term.read(last_stdout), cancelled]);
+                      return await term.read(last_stdout);
                     } finally {
-                      stdin_cancellation_token = undefined;
-                      term.set_prompt(ps1);
                       await sleep(0);
-                      term.set_prompt("");
                       reading_stdin = false;
                     }
                 });
                 await e.onStdout(async (text) => {
                   last_stdout = text;
-                  term.echo(text, {newline : false});
+                  let [s, newline] = process_stream_write(text);
+                  term.echo(s, { newline });
                 });
                 await e.onStderr(async (text) => {
-                    term.error(text, {newline : false});
+                  let [s, newline] = process_stream_write(text);
+                  term.error(s, { newline });
                 });
                 e.start();
                 try {
                   await e.validate_syntax();
                 } catch(e) {
+                  console.log("failed syntax")
+                  term.set_command(cmd);
                   term.error(e);
                   return;
                 }
                 await original();
-                let result
                 try {
                   result = await e.result();
                 } catch(e){
+                  flushConsole();
+                  is_output = true;
                   term.error(e);
+                  await sleep(10);
                   return;
                 }
-                if(result){
-                  term.echo(result  + "\n");
-                }
               } finally {
-                term.set_prompt(ps1);
+                await sleep(10);
+                flushConsole();
+                if(result){
+                  term.echo(result);
+                }
+                await sleep(10);
+                is_output = false;
                 current_execution = undefined;
+                updatePrompts();
+                consoleWrapper.querySelector(".cmd-wrapper").style.marginLeft = "4ch";
               }
             }
           }
         });
+        updatePrompts();
+        consoleWrapper.querySelector("[data-index='0']").style.marginLeft = "0ch";
+        inputObserver.observe(consoleWrapper.querySelector(".cmd-wrapper"), { childList : true });
+        outputObserver.observe(consoleWrapper.querySelector(".terminal-output"), { childList : true });
+        cmdPromptObserver.observe(consoleWrapper.querySelector(".cmd-prompt"), { childList : true });
         window.term = term;
     })();
     </script>
