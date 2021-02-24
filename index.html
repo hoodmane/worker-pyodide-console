@@ -12,6 +12,10 @@
         --size: 1.5; 
         --background: transparent;
       }
+      body {
+        background: black; 
+        margin: 0;
+      }
       [data-index], .cmd-wrapper {
         margin-left: 4ch;
       }
@@ -37,13 +41,13 @@
         /* background-color: brown; */
         /*pointer-events: none;
         user-select: none;*/
-        /* position: unset; */
+        position: unset;
         display: flex;
         flex-direction: column;
       }
     </style>
   </head>
-  <body style="background: black; margin:0;">
+  <body>
     <div class="console-wrapper">
       <div class="console-prompt-margin cmd">
       </div>
@@ -65,18 +69,20 @@
         return [s, newline];
     }
 
-    let is_output = false;
-    let reading_stdin = false;
-    let current_execution = undefined;
-    let last_stdout = "";
-    let data_index = 0;
-    let revsearch_active = false;
+    const termState =  {
+      current_execution: undefined,
+      is_output : false,
+      reading_stdin: false,
+      last_stdout: "",
+      revsearch_active: false,
+      revsearch_recently_active : false,
+    };
     let term;
 
-    let ps1 = '>>> ', ps2 = '... ';
+    const ps1 = '>>> ', ps2 = '... ';
    
-    let promptMargin = document.querySelector(".console-prompt-margin");
-    let consoleWrapper = document.querySelector(".console-wrapper");
+    const promptMargin = document.querySelector(".console-prompt-margin");
+    const consoleWrapper = document.querySelector(".console-wrapper");
 
     function clearPrompts(){
       for(let node of promptMargin.querySelectorAll(".input")){
@@ -84,28 +90,40 @@
       }
     }
 
-    function addSpanOnLevelWith(node, text){
+    function addPromptOnLevelWith(node, text){
       let top = node.getBoundingClientRect().top;
       let span = document.createElement("span");
-      let term_top = consoleWrapper.querySelector("[data-index='0']").getBoundingClientRect().top;
+      let term_top = consoleWrapper.getBoundingClientRect().top;
       span.style.top = `${top - term_top}px`;
       span.style.position = "absolute";
       span.innerText = text;
       span.className = "input";
       promptMargin.appendChild(span);
     }
-    window.addSpanOnLevelWith = addSpanOnLevelWith;
 
     function updatePrompts(){
       clearPrompts();
       let promptText = ps1;
       for(let node of consoleWrapper.querySelectorAll(".cmd-wrapper div")){
-        addSpanOnLevelWith(node, promptText);
+        addPromptOnLevelWith(node, promptText);
         promptText = ps2;
       }
     }
 
-    function commit_prompts(){
+    function addRevsearchPrompts(){
+      if(!termState.revsearch_recently_active){
+        return;
+      }
+      let data = document.querySelectorAll("[data-index]");
+      let lastData = data[data.length - 1];
+      let promptText = ps1;
+      for(let node of lastData.children){
+        addPromptOnLevelWith(node, promptText);
+        promptText = ps2;
+      }
+    }
+
+    function commitPrompts(){
       for(let node of promptMargin.querySelectorAll(".input")){
         node.className = "";
       }
@@ -125,176 +143,176 @@
       return child.innerText.search("reverse-i-search") !== -1;
     }
 
-    let inputObserver = new MutationObserver(async (mutationsList) => {
-      let cmd = term.get_command();
-      if(cmd === ""){
-        await sleep(10);
-      }
-      if(current_execution || revsearch_active){
+    function setIndent(node, indent){
+      node.style.marginLeft = indent ? "4ch" : "0ch";
+    }
+
+    const inputObserver = new MutationObserver(async (mutationsList) => {
+      if(termState.current_execution || termState.revsearch_recently_active){
         return;
       }
       updatePrompts();
     });
 
-    let outputObserver = new MutationObserver((mutationsList) => {
+    const outputObserver = new MutationObserver((mutationsList) => {
       for(let mutation of mutationsList){
-        if(is_output){
+        if(termState.is_output){
           mutation.addedNodes[0].style.marginLeft = "0ch";
         }
       }
     });
 
-    let cmdPromptObserver = new MutationObserver(async (mutationsList) => {
-      
+    const cmdPromptObserver = new MutationObserver(async (mutationsList) => {
       let hasPrompt = false;
       for(let node of consoleWrapper.querySelector(".cmd-prompt").children){
         hasPrompt ||= node.innerText.trim() !== "";
       }
-      let cmdWrapper = consoleWrapper.querySelector(".cmd-wrapper");
-      cmdWrapper.style.marginLeft = hasPrompt ? "0ch" : "4ch";
-      if(hasPrompt || revsearch_active){
-        await sleep(10);
+      setIndent(consoleWrapper.querySelector(".cmd-wrapper"), !hasPrompt);
+      // Give keydown handler time to update revsearch_active.
+      await sleep(1);
+      if(hasPrompt || termState.revsearch_active){
         clearPrompts();
       } else {
         updatePrompts();
       }
     });
 
-    let stdinCallback = async () => {
+    async function stdinCallback() {
       term.resume();
-      reading_stdin = true;
+      termState.reading_stdin = true;
       try {
-        return await term.read(last_stdout);
+        return await term.read(termState.last_stdout);
       } finally {
-        reading_stdin = false;
+        termState.reading_stdin = false;
       }
     };
 
-    let stdoutCallback = async (text) => {
-      last_stdout = text;
+    async function stdoutCallback(text){
+      termState.last_stdout = text;
       let [s, newline] = process_stream_write(text);
       term.echo(s, { newline });
     };
 
-    let stderrCallback = async (text) => {
+    async function stderrCallback(text) {
       let [s, newline] = process_stream_write(text);
       term.error(s, { newline });
     };
 
-    let termOptions = {
+    const termOptions = {
       prompt: "",
       completionEscape: false,
       completion: async function(command) {
         return await complete(command);
       },
+      // The normal history system doesn't work that well IMO, setting
+      // historyFilter to false allows us to manually add items to the history. 
       historyFilter : true,
       keypress : (e) => {
-        console.log(e);
-        let suppress_key = current_execution && !reading_stdin;
+        let suppress_key = termState.current_execution && !termState.reading_stdin;
         let ctrls =  e.ctrlKey && (e.key === "C");
         suppress_key &&= !ctrls;
         return suppress_key ? false : undefined;
       },
       keydown : (e) => {
-        let suppress_key = current_execution && !reading_stdin;
+        let suppress_key = termState.current_execution && !termState.reading_stdin;
         let ctrls =  e.ctrlKey && (e.key === "C");
         suppress_key &&= !ctrls;
-        sleep(5).then(() => { 
-          let oldrevsearch_active = revsearch_active;
-            revsearch_active = isReverseSearchActive();
-            console.log(revsearch_active, oldrevsearch_active);
-            if(oldrevsearch_active && !revsearch_active){
-              updatePrompts();
-            }
+        // We need special handling if the user presses "Enter" during a reverse
+        // search. Pressing "Enter" will cause "revsearch_active" to be set
+        // false, so we rely instead on revsearch_recently_active in the "ENTER"
+        // handler. cmdPromptObserver needs revsearch_active to restore the
+        // prompt when the reverse search is done.
+        sleep(0).then(async () => { 
+          termState.revsearch_active = isReverseSearchActive();
+          await sleep(10);
+          termState.revsearch_recently_active = termState.revsearch_active;
         });
         return suppress_key ? false : undefined;
       },
       keymap: {
+        "CTRL+L" : async function(event, original){
+          promptMargin.replaceChildren();
+          original();
+          await sleep(0);
+          updatePrompts();
+        },
         "CTRL+D" : async function(event, original){
-          if(reading_stdin){
+          if(termState.reading_stdin){
             term.pop();
             return true;
           }
         },
         "CTRL+C" : async function(event, original){
-          if(reading_stdin){
+          if(termState.reading_stdin){
             term.pop();
             return true;
           }
-          if(!reading_stdin && current_execution){
-            current_execution.keyboardInterrupt();
-          }
           if(isReverseSearchActive()){
+            // TODO: Can we handle this?
             return true;
           }
-
+          if(termState.current_execution){
+            termState.current_execution.keyboardInterrupt();
+          }
           original();
-          await sleep(10);
-          commit_prompts();
+          // await sleep(10);
+          commitPrompts();
           updatePrompts();
         },
         ENTER: async function(event, original) { 
           let cmd = term.get_command();
-          if(revsearch_active){
-            await sleep(10);
-            let data = document.querySelectorAll("[data-index]");
-            let lastData = data[data.length - 1];
-            let promptText = ps1;
-            await sleep(10);
-            for(let node of lastData.children){
-              addSpanOnLevelWith(node, promptText);
-              promptText = ps2;
-            }
-          }
-          if(reading_stdin){
+          addRevsearchPrompts();
+          if(termState.reading_stdin){
             original();
             return;
           }
-          commit_prompts();
+          commitPrompts();
           let result = undefined;
           let error = undefined;
           try {
-            term.history().append(cmd);
             term.set_command("");
-            let e = await new Execution(cmd);
-            current_execution = e;
+            const execution = await new Execution(cmd);
+            termState.current_execution = execution;
             // Before setting is_output to true, we need to sleep to allow
-            // the input lines to be committed.
+            // the input lines to be printed with is_output false.
             await sleep(0);
-            is_output = true;
-            await e.onStdin(stdinCallback);
-            await e.onStdout(stdoutCallback);
-            await e.onStderr(stderrCallback);
-            e.start();
+            termState.is_output = true;
+            await execution.onStdin(stdinCallback);
+            await execution.onStdout(stdoutCallback);
+            await execution.onStderr(stderrCallback);
+            execution.start();
             try {
-              await e.validate_syntax();
+              await execution.validate_syntax();
             } catch(e) {
               term.set_command(cmd);
               term.error(e);
               return;
             }
+            term.history().append(cmd);
             await original();
             try {
-              result = await e.result();
+              result = await execution.result();
             } catch(e){
+              console.warn("error", e);
               error = e;
               return;
             }
           } finally {
+            // Allow any final prints to finish before flushConsole.
             await sleep(0);
             flushConsole();
             if(result){
               term.echo(result);
             }
             if(error){
-              term.error(result);
+              term.error(error);
             }
-            // Give the output
+            // Allow the output to be printed before we set is_output to false.
             await sleep(0);
-            is_output = false;
-            current_execution = undefined;
+            termState.is_output = false;
+            termState.current_execution = undefined;
             updatePrompts();
-            consoleWrapper.querySelector(".cmd-wrapper").style.marginLeft = "4ch";
+            setIndent(consoleWrapper.querySelector(".cmd-wrapper"), true);
           }
         }
       }
@@ -302,12 +320,14 @@
 
     (async () => {
       await ready;
+      // Banner is produced from Python so it doesn't get populated until "ready".
+      termOptions.greetings = banner;
       term = $('.terminal').terminal(
         (command) => {},
         termOptions  
       );
       updatePrompts();
-      consoleWrapper.querySelector("[data-index='0']").style.marginLeft = "0ch";
+      setIndent(consoleWrapper.querySelector("[data-index='0']"), false);
       inputObserver.observe(consoleWrapper.querySelector(".cmd-wrapper"), { childList : true });
       outputObserver.observe(consoleWrapper.querySelector(".terminal-output"), { childList : true });
       cmdPromptObserver.observe(consoleWrapper.querySelector(".cmd-prompt"), { childList : true });
