@@ -3,6 +3,7 @@ import socketserver
 
 PORT = 8081
 
+
 class MyHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
     def end_headers(self):
         self.send_my_headers()
@@ -13,9 +14,9 @@ class MyHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header("Cross-Origin-Embedder-Policy", "require-corp")
         self.send_header("Cross-Origin-Opener-Policy", "same-origin")
 
+
 Handler = MyHTTPRequestHandler
 
 with socketserver.TCPServer(("", PORT), Handler) as httpd:
     print("serving at port", PORT)
     httpd.serve_forever()
-

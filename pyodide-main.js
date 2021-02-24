@@ -23,7 +23,7 @@ class Execution {
             await initialized;
             this._inner = await new InnerExecution(code);
             this._result = this._inner.result();
-            this._validate_syntax = this._inner.validate_syntax()
+            this._validate_syntax = this._inner.validate_syntax();
             this._interrupt_buffer = await this._inner.interrupt_buffer();
             this._started = false;
             return this;
