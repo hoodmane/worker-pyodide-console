@@ -48,7 +48,7 @@ async def exec_code(code, syntax_check_passed, stdin_callback, stdout_callback, 
         code, flags=ast.PyCF_ALLOW_TOP_LEVEL_AWAIT  # type: ignore
     )
     syntax_check_passed()
-    await sleep(0);
+    await sleep(0)
     with redirect_stdout(WriteStream(stdout_callback)),\
     redirect_stderr(WriteStream(stderr_callback)),\
     redirect_stdin(ReadStream(stdin_callback)):

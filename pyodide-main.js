@@ -4,20 +4,23 @@ let InnerExecution;
 let banner;
 let complete;
 
-async function init(){
-    const worker = new Worker("worker.js");
+let resolveInitialized;
+let initialized = new Promise(resolve => resolveInitialized = resolve);
+async function initializePyodide(){
+    const worker = new Worker("pyodide-worker.js");
     const wrapper = Comlink.wrap(worker);
     ({pyodide, InnerExecution, banner, complete} = await wrapper());
     wrapper[Comlink.releaseProxy]();
     banner = "Welcome to the Pyodide terminal emulator 🐍\n" + await banner;
     window.pyodide = pyodide;
+    resolveInitialized();
 }
-let ready = init();
+
 
 class Execution {
     constructor(code){
         return (async () => {
-            await ready;
+            await initialized;
             this._inner = await new InnerExecution(code);
             this._result = this._inner.result();
             this._validate_syntax = this._inner.validate_syntax()
@@ -93,4 +96,4 @@ class StdinReader {
     }
 }
 
-export {Execution, ready, pyodide, banner, complete};
+export {Execution, pyodide, banner, complete, initializePyodide};
