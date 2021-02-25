@@ -69,7 +69,7 @@ function processTraceback(e){
             topIndex = idx + 1;
             bottomIndex = undefined;
         }
-        if(value.search("<console>") >= 0 || value.search("<unknown>") >= 0){
+        if(value.search("<console>") >= 0){
             bottomIndex ??= idx;
         }
     }
