@@ -47,6 +47,7 @@ def pycomplete(source):
     match = match_nonwhite_space.search(revsource)
     if match:
         source = source[: -match.end()]
+    completer.matches = []
     completer.complete(source, 0)
     return completer.matches
 
