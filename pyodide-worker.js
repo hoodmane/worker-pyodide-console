@@ -48,7 +48,8 @@ class InnerStdinReader {
 
     _read(n){
         this.outer_reader._read(n);
-        Atomics.wait(this._size, 0);
+        this._size[0] = 0;
+        Atomics.wait(this._size, 0, 0);
         let size = this._size[0];
         if(size === -1){
             throw new Error("Stdin Cancelled");

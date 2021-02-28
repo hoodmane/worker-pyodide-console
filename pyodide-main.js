@@ -84,6 +84,7 @@ class StdinReader {
     async _read(n){
         try {
             let text = await this._readCallback(n);
+            console.log("text", `$${text}$`);
             // encodeInto apparently doesn't work with SAB...
             let bytes = encoder.encode(text);
             this._size[0] = bytes.length;

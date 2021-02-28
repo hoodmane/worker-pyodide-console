@@ -1,3 +1,5 @@
+// import * as db from "https://cdn.jsdelivr.net/npm/lodash.debounce/index.min.js";
+// console.log(db);
 import {Execution, initializePyodide, pyodide, banner, complete} from "./pyodide-main.js";
 
 let term;
@@ -28,6 +30,15 @@ function unindentCurrentLine(){
     setCurrentInputLine(" ".repeat(4*(((leadingSpaces-1)/4)|0)) + trimmedLine);
 }
 
+function scrollToBottom(){
+    let contentBottom = document.querySelector(".cmd-wrapper").getBoundingClientRect().bottom;
+    let contentTop = document.body.getBoundingClientRect().top;
+    let scroll = contentBottom - contentTop - window.innerHeight * 0.8;
+    if(scroll + contentTop > 0){
+        window.scrollTo(0, scroll);
+    }
+}
+
 function process_stream_write(s){
     let newline = s.endsWith("\n");
     if(newline){
@@ -48,10 +59,30 @@ const termState =  {
 const inputTagCharacter = "\uE000";
 const zeroWidthSpace = "\u200B";
 
-const ps1 = ">>> ", ps2 = "... ";
+const ps1 = ">>> ", ps2 = "... " /* "\u2219\u2219\u2219" */;
 
-const promptMargin = document.querySelector(".console-prompt-margin");
-const consoleWrapper = document.querySelector(".console-wrapper");
+let promptMargin;
+let consoleWrapper; 
+
+async function init() {
+    await initializePyodide();
+    // Banner is produced from Python so it doesn't get populated until "ready".
+    termOptions.greetings = banner;
+    term = $(document.body).terminal(
+        (command) => {},
+        termOptions  
+    );
+    // term.prepend('<div class="console-prompt-margin cmd"></div>')
+    promptMargin = document.querySelector(".console-prompt-margin");
+    consoleWrapper = document.body;
+    term.set_prompt("");
+    // We have to put in "ENTER" here because of the newline bug
+    term.keymap("ENTER", enterHandler);
+    updatePrompts();
+    inputObserver.observe(consoleWrapper.querySelector(".cmd-wrapper"), { childList : true });
+    outputObserver.observe(consoleWrapper.querySelector(".terminal-output"), { childList : true });
+    cmdPromptObserver.observe(consoleWrapper.querySelector(".cmd-prompt"), { childList : true });
+}
 
 function clearPrompts(){
     for(let node of promptMargin.querySelectorAll(".input")){
@@ -113,7 +144,7 @@ function isReverseSearchActive(){
 }
 
 function clearReverseSearch(){
-    term.keymap()["CTRL+G"]();
+    term.invoke_key("CTRL+G");
 }
 
 function setIndent(node, indent){
@@ -162,23 +193,35 @@ const cmdPromptObserver = new MutationObserver(async (_mutationsList) => {
 });
 
 async function stdinCallback() {
-    term.resume();
     termState.reading_stdin = true;
     try {
         // Prepend a zeroWidthSpace to insure that the prompt is not empty.
         // This is to allow detection in cmdPromptObserver
-        return await term.read(zeroWidthSpace + termState.last_stdout);
+        // setIndent(consoleWrapper.querySelector(".cmd-wrapper"), false);
+        await sleep(0);
+        let prompt = zeroWidthSpace;
+        if(!termState.last_stdout.endsWith("\n")){
+            prompt += termState.last_stdout;
+        }
+        let result = await term.read(prompt);
+        // Add a newline. stdin.readline is supposed to return lines of text
+        // terminated by newlines.
+        result += "\n";
+        return result;
     } finally {
         termState.reading_stdin = false;
         // term.read() seems to screw up the "ENTER" handler... 
         // Put it back!
         term.keymap("ENTER", enterHandler);
+        setIndent(consoleWrapper.querySelector(".cmd-wrapper"), true);
+        term.set_prompt("");
     }
 }
 
 async function stdoutCallback(text){
     termState.last_stdout = text;
     let [s, newline] = process_stream_write(text);
+    console.log("newline", newline);
     term.echo(s, { newline });
 }
 
@@ -188,15 +231,16 @@ async function stderrCallback(text) {
 }
 
 async function submit(){
-    await term.keymap()["ENTER"]();
+    await term.invoke_key("ENTER");
 }
 
 async function submitInner(event, original){
     original ??= (() => {});
     let cmd = term.get_command();
-    addRevsearchPrompts();
-    if(termState.reading_stdin){
-        original();
+    if(cmd === ""){
+        commitPrompts();
+        term.echo("");
+        updatePrompts();
         return;
     }
     let result = undefined;
@@ -207,6 +251,7 @@ async function submitInner(event, original){
         await execution.onStdin(stdinCallback);
         await execution.onStdout(stdoutCallback);
         await execution.onStderr(stderrCallback);
+        cmdPromptObserver.disconnect();
         execution.start();
         try {
             await execution.validate_syntax();
@@ -244,6 +289,7 @@ async function submitInner(event, original){
         await sleep(0);
         termState.current_execution = undefined;
         updatePrompts();
+        cmdPromptObserver.observe(consoleWrapper.querySelector(".cmd-prompt"), { childList : true });
         setIndent(cmdWrapper, true);
     }
 }
@@ -264,6 +310,11 @@ function enterNewline(event){
 }
 
 async function enterHandler(event, original) { 
+    addRevsearchPrompts();
+    if(termState.reading_stdin){
+        original();
+        return;
+    }
     if(event === undefined){
         // Was triggered synthetically (by CTRL+ENTER). submit no matter
         // what.
@@ -284,7 +335,11 @@ window.enterHandler = enterHandler;
 
 const keymap = {
     "BACKSPACE" : function(event, original){
-        original();
+        if(/(^|\n)[^\S\r\n]+$/.test(term.before_cursor())){
+            unindentCurrentLine();
+        } else {
+            original();
+        }
     },
     "CTRL+L" : async function(event, original){
         promptMargin.replaceChildren();
@@ -407,20 +462,3 @@ const termOptions = {
         return suppress_key ? false : undefined;
     }
 };
-
-async function init() {
-    await initializePyodide();
-    // Banner is produced from Python so it doesn't get populated until "ready".
-    termOptions.greetings = banner;
-    term = $(".terminal").terminal(
-        (command) => {},
-        termOptions  
-    );
-    term.set_prompt("");
-    // We have to put in "ENTER" here because of the newline bug
-    term.keymap("ENTER", enterHandler);
-    updatePrompts();
-    inputObserver.observe(consoleWrapper.querySelector(".cmd-wrapper"), { childList : true });
-    outputObserver.observe(consoleWrapper.querySelector(".terminal-output"), { childList : true });
-    cmdPromptObserver.observe(consoleWrapper.querySelector(".cmd-prompt"), { childList : true });
-}

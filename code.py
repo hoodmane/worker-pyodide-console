@@ -6,6 +6,7 @@ from pyodide._base import CodeRunner
 from pyodide.console import repr_shorten, InteractiveConsole
 from pyodide import JsException
 import __main__
+import time
 
 
 class WriteStream:
