@@ -55,39 +55,27 @@ const termState =  {
     revsearch_recently_active : false,
     revsearch_before_command : undefined,
 };
-// A private use area unicode character
-const inputTagCharacter = "\uE000";
 const zeroWidthSpace = "\u200B";
 
 const ps1 = ">>> ", ps2 = "... " /* "\u2219\u2219\u2219" */;
 
-let promptMargin;
-let consoleWrapper; 
+const promptMargin = document.querySelector(".console-prompt-margin");
+const consoleWrapper = document.querySelector(".console-wrapper");
 
 async function init() {
     await initializePyodide();
     // Banner is produced from Python so it doesn't get populated until "ready".
     termOptions.greetings = banner;
-    term = $(document.body).terminal(
+    term = $(consoleWrapper.querySelector(".terminal")).terminal(
         (command) => {},
         termOptions  
     );
-    // term.prepend('<div class="console-prompt-margin cmd"></div>')
-    promptMargin = document.querySelector(".console-prompt-margin");
-    consoleWrapper = document.body;
     term.set_prompt("");
     // We have to put in "ENTER" here because of the newline bug
     term.keymap("ENTER", enterHandler);
     updatePrompts();
     inputObserver.observe(consoleWrapper.querySelector(".cmd-wrapper"), { childList : true });
-    outputObserver.observe(consoleWrapper.querySelector(".terminal-output"), { childList : true });
     cmdPromptObserver.observe(consoleWrapper.querySelector(".cmd-prompt"), { childList : true });
-}
-
-function clearPrompts(){
-    for(let node of promptMargin.querySelectorAll(".input")){
-        node.remove();
-    }
 }
 
 function addPromptOnLevelWith(node, text){
@@ -101,7 +89,16 @@ function addPromptOnLevelWith(node, text){
     promptMargin.appendChild(span);
 }
 
+function clearPrompts(){
+    for(let node of promptMargin.querySelectorAll(".input")){
+        node.remove();
+    }
+}
+
 function updatePrompts(){
+    if(!term){
+        return;
+    }
     clearPrompts();
     let promptText = ps1;
     for(let node of consoleWrapper.querySelectorAll(".cmd-wrapper div")){
@@ -156,20 +153,6 @@ const inputObserver = new MutationObserver(async (_mutationsList) => {
         return;
     }
     updatePrompts();
-});
-
-// Control indentation of text in output region
-const outputObserver = new MutationObserver((mutationsList) => {
-    for(let mutation of mutationsList){
-        for(let node of mutation.addedNodes){
-            let span = node.firstChild.firstChild;
-            if(span && span.innerText.startsWith(inputTagCharacter)){
-                span.innerText = span.innerText.slice(1);
-                span.setAttribute("data-text", span.innerText);
-                node.style.marginLeft = "4ch";
-            }
-        }
-    }
 });
 
 // Hide the prompts during reverse search or during "input", display them again when trimmed.
@@ -261,8 +244,7 @@ async function submitInner(event, original){
         }
         term.set_command("");
         commitPrompts();
-        // print input tagged so that outputObserver will know to indent it
-        term.echo(inputTagCharacter + cmd); 
+        term.echo(cmd, {finalize : (node) => node[0].style.marginLeft = "4ch"});
         term.history().append(cmd);
         consoleWrapper.querySelector(".cmd-wrapper").style.display = "none";
         try {
@@ -414,6 +396,10 @@ const termOptions = {
     completion: async function(command) {
         return await complete(command);
     },
+    onAfterEcho : () => {
+        updatePrompts();
+    },
+    // scrollBottomOffset : "50vh",
     keymap,
     // The normal history system doesn't work that well IMO, setting
     // historyFilter to false allows us to manually add items to the history. 
