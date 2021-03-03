@@ -127,7 +127,7 @@ function commitPrompts(){
 }
 
 function flushConsole(){
-    if(consoleWrapper.querySelector(".cmd-prompt").innerText){
+    if(consoleWrapper.querySelector(".partial")){
         term.echo("");
     }
 }
@@ -169,6 +169,7 @@ const cmdPromptObserver = new MutationObserver(async (_mutationsList) => {
 
 async function stdinCallback() {
     termState.reading_stdin = true;
+    // Formatters use global state =(
     let save = $.terminal.defaults.formatters.pop();
     try {
         setIndent(consoleWrapper.querySelector(".cmd-wrapper"), false);
@@ -204,6 +205,12 @@ async function submit(){
     await term.invoke_key("ENTER");
 }
 
+function prism_format(code){
+    code = $.terminal.escape_brackets(code);
+    code = $.terminal.prism("python", code);
+    return code;
+}
+
 async function submitInner(event, original){
     original ??= (() => {});
     let cmd = term.get_command();
@@ -231,7 +238,7 @@ async function submitInner(event, original){
         }
         term.set_command("");
         commitPrompts();
-        term.echo(cmd, {finalize : (node) => node[0].style.marginLeft = "4ch"});
+        term.echo(prism_format(cmd), {finalize : (node) => node[0].style.marginLeft = "4ch"});
         term.history().append(cmd);
         consoleWrapper.querySelector(".cmd-wrapper").style.display = "none";
         setIndent(consoleWrapper.querySelector(".cmd-wrapper"), false);
@@ -247,7 +254,7 @@ async function submitInner(event, original){
         await sleep(0);
         flushConsole();
         if(result){
-            term.echo(result);
+            term.echo(prism_format(result));
         }
         if(error){
             term.error(error.message);
