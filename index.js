@@ -48,7 +48,6 @@ function process_stream_write(s){
 const termState =  {
     current_execution: undefined,
     reading_stdin: false,
-    last_stdout: "",
     revsearch_active: false,
     revsearch_recently_active : false,
     revsearch_before_command : undefined,
@@ -159,11 +158,12 @@ const inputObserver = new MutationObserver(async (_mutationsList) => {
 const cmdPromptObserver = new MutationObserver(async (_mutationsList) => {
     // Give keydown handler time to update revsearch_active.
     await sleep(1);
-    setIndent(consoleWrapper.querySelector(".cmd-wrapper"), !termState.revsearch_active);
-    if(termState.revsearch_active){
-        clearPrompts();
-    } else {
+    let includePrompt = !(termState.revsearch_active || termState.reading_stdin);
+    setIndent(consoleWrapper.querySelector(".cmd-wrapper"), includePrompt);
+    if(includePrompt){
         updatePrompts();
+    } else {
+        clearPrompts();
     }
 });
 
@@ -173,6 +173,7 @@ async function stdinCallback() {
     let save = $.terminal.defaults.formatters.pop();
     try {
         setIndent(consoleWrapper.querySelector(".cmd-wrapper"), false);
+        clearPrompts();
         await sleep(0);
         let result = await term.read();
         // Add a newline. stdin.readline is supposed to return lines of text
@@ -186,12 +187,10 @@ async function stdinCallback() {
         // term.read() seems to screw up the "ENTER" handler... 
         // Put it back!
         term.keymap("ENTER", enterHandler);
-        term.set_prompt("");
     }
 }
 
 async function stdoutCallback(text){
-    termState.last_stdout = text;
     let [s, newline] = process_stream_write(text);
     term.echo(s, { newline, formatters : false });
 }
@@ -228,7 +227,6 @@ async function submitInner(event, original){
         await execution.onStdin(stdinCallback);
         await execution.onStdout(stdoutCallback);
         await execution.onStderr(stderrCallback);
-        cmdPromptObserver.disconnect();
         execution.start();
         try {
             await execution.validate_syntax();
@@ -266,7 +264,6 @@ async function submitInner(event, original){
         cmdWrapper.style.display = "";
         termState.current_execution = undefined;
         updatePrompts();
-        cmdPromptObserver.observe(consoleWrapper.querySelector(".cmd-prompt"), { childList : true });
         setIndent(cmdWrapper, true);
     }
 }
@@ -394,11 +391,11 @@ const termOptions = {
     completion: async function(command) {
         return await complete(command);
     },
-    onAfterEcho : () => {
-        if(termState.current_execution){
-            updatePrompts();
-        }
-    },
+    // onAfterEcho : async () => {
+    //     if(!termState.current_execution){
+    //         updatePrompts();
+    //     }
+    // },
     onFlush : async () => {
         await sleep(25);
         scrollToBottom();
