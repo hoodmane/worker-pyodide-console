@@ -25,11 +25,7 @@ class ReadStream:
         self.read_handler = read_handler
 
     def readline(self, n=-1):
-        try:
-            return self.read_handler(n)
-        except JsException:
-            raise KeyboardInterrupt from None
-
+        return self.read_handler(n)
 
 class redirect_stdin(_RedirectStream):
     _stream = "stdin"

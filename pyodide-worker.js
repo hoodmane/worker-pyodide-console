@@ -81,8 +81,7 @@ class InnerExecution {
 
     async setStdin(outer_stdin_reader){
         this.proxies.push(outer_stdin_reader);
-        this._stdinReader = await new InnerStdinReader(outer_stdin_reader);
-        this._stdin_callback = this._stdinReader._read.bind(this._stdinReader);
+        this._stdin_callback = outerWrap(outer_stdin_reader);
     }
 
     onStdout(callback){
@@ -99,12 +98,15 @@ class InnerExecution {
 function waitOnSizeBuffer(){
     while(true){
         let result = Atomics.wait(size_buffer, 1, 0, 50);
-        if(result === "ok"){
-            return;
-        } else if(result === "timed-out"){
-            pyodide.checkInterrupt();
-        } else {
-            throw Error("Unreachable?");
+        switch(result){
+            case "ok":
+            case "not-equal":
+                return;
+            case "timed-out":
+                pyodide.checkInterrupt();
+                break;
+            default:
+                throw new Error("Unreachable");
         }
     }
 }
@@ -135,28 +137,6 @@ function outerWrap(innerWrap){
 }
 
 let decoder = new TextDecoder("utf-8");
-
-class InnerStdinReader {
-    constructor(stdin_reader){
-        return (async () => {
-            this.outer_reader = stdin_reader;
-            [this._size, this._buffer] = await stdin_reader.buffers();
-            return this;
-        })();
-    }
-
-    _read(n){
-        this.outer_reader._read(n);
-        this._size[0] = 0;
-        Atomics.wait(this._size, 0, 0);
-        let size = this._size[0];
-        if(size === -1){
-            throw new Error("Stdin Cancelled");
-        }
-        // Can't use subarray, "the provided ArrayBufferView value must not be shared."
-        return decoder.decode(this._buffer.slice(0, size));
-    }
-}
 
 let blockingSleepBuffer = new Int32Array(new SharedArrayBuffer(4));
 function blockingSleep(t){
@@ -190,7 +170,6 @@ async function init(size_buffer, set_data_buffer, asyncWrappers){
         self[name] = namespace.get(name);
     }
     namespace.destroy();
-
 
     return Comlink.proxy({ 
         InnerExecution, 

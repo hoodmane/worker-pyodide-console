@@ -62,13 +62,16 @@ const consoleWrapper = document.querySelector(".console-wrapper");
 
 async function init() {
     await initializePyodide();
+    // termOptions.greetings = banner;
     // Banner is produced from Python so it doesn't get populated until "ready".
-    termOptions.greetings = banner;
     term = $(consoleWrapper.querySelector(".terminal")).terminal(
         (command) => {},
         termOptions  
     );
-    term.set_prompt("");
+    term.echo(banner, {formatters : false});
+    $.terminal.defaults.formatters.push(
+        $.terminal.prism.bind(null, 'python')
+    );
     // We have to put in "ENTER" here because of the newline bug
     term.keymap("ENTER", enterHandler);
     updatePrompts();
@@ -174,18 +177,22 @@ const cmdPromptObserver = new MutationObserver(async (_mutationsList) => {
 });
 
 async function stdinCallback() {
+    console.log("stdinCallback?");
     termState.reading_stdin = true;
+    let save = $.terminal.defaults.formatters.pop();
     try {
         // Prepend a zeroWidthSpace to insure that the prompt is not empty.
         // This is to allow detection in cmdPromptObserver
         setIndent(consoleWrapper.querySelector(".cmd-wrapper"), false);
         await sleep(0);
         let result = await term.read();
+        console.log("result:", result);
         // Add a newline. stdin.readline is supposed to return lines of text
         // terminated by newlines.
         result += "\n";
         return result;
     } finally {
+        $.terminal.defaults.formatters.push(save);
         setIndent(consoleWrapper.querySelector(".cmd-wrapper"), true);
         termState.reading_stdin = false;
         // term.read() seems to screw up the "ENTER" handler... 
@@ -198,7 +205,7 @@ async function stdinCallback() {
 async function stdoutCallback(text){
     termState.last_stdout = text;
     let [s, newline] = process_stream_write(text);
-    term.echo(s, { newline });
+    term.echo(s, { newline, formatters : false });
 }
 
 async function stderrCallback(text) {
@@ -232,7 +239,7 @@ async function submitInner(event, original){
         try {
             await execution.validate_syntax();
         } catch(e) {
-            term.error(e);
+            term.error(e.message);
             return;
         }
         term.set_command("");
@@ -256,7 +263,7 @@ async function submitInner(event, original){
             term.echo(result);
         }
         if(error){
-            term.error(error);
+            term.error(error.message);
         }
         // Make sure to show the cmd before updatePrompts, otherwise the prompts
         // might not end up in the right place.
@@ -386,8 +393,8 @@ const keymap = {
 };
 
 const termOptions = {
-    // prompt: "", // triggered bug
-    // https://github.com/jcubic/jquery.terminal/issues/651
+    prompt: "",
+    greetings : false,
     completionEscape: false,
     completion: async function(command) {
         return await complete(command);
@@ -397,7 +404,6 @@ const termOptions = {
             updatePrompts();
         }
     },
-    // scrollBottomOffset : "50vh",
     keymap,
     // The normal history system doesn't work that well IMO, setting
     // historyFilter to false allows us to manually add items to the history. 
