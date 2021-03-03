@@ -396,10 +396,12 @@ const termOptions = {
     },
     onAfterEcho : () => {
         if(termState.current_execution){
-            scrollToBottom();
-        } else {
             updatePrompts();
         }
+    },
+    onFlush : async () => {
+        await sleep(25);
+        scrollToBottom();
     },
     keymap,
     // The normal history system doesn't work that well IMO, setting
