@@ -44,17 +44,16 @@ function blockingWrapperForAsync(func){
             }
             let bytes = encoder.encode(JSON.stringify(result));
             let fits = bytes.length <= buffers.data_buffer.length;
-            buffers.size_buffer[0] = bytes.length;
-            buffers.size_buffer[1] = err_sgn * fits;
+            Atomics.store(buffers.size_buffer, 0, bytes.length);
+            Atomics.store(buffers.size_buffer, 1, err_sgn * fits);
             if(!fits){
                 buffers.data_buffer_promise = promiseHandles();
-                await sleep(5);
                 Atomics.notify(buffers.size_buffer, 1);
                 await buffers.data_buffer_promise.promise;
             }
-            buffers.size_buffer[1] = err_sgn;
             buffers.data_buffer.set(bytes);
-            await sleep(5);
+            Atomics.store(buffers.size_buffer, 1, err_sgn);
+            // Does this lead to race conditions on data_buffer?
             Atomics.notify(buffers.size_buffer, 1);
         } catch(e){
             console.warn(`Error occurred in blockingWrapperForAsync for ${func.name}:`);

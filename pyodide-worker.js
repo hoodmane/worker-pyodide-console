@@ -122,7 +122,13 @@ function outerWrap(innerWrap){
             waitOnSizeBuffer();
         }
         let size = size_buffer[0];
-        let result = JSON.parse(decoder.decode(data_buffer.slice(0, size)));
+        let result;
+        try {
+            result = JSON.parse(decoder.decode(data_buffer.slice(0, size)));
+        } catch(e){
+            console.log("data_buffer", data_buffer);
+            console.log("Atomics.load:", Atomics.load(data_buffer, 0));
+        }
         if(size_buffer[1] === 1){
             return result;
         } else if(size_buffer[1] === -1){

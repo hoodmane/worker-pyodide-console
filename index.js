@@ -177,7 +177,6 @@ const cmdPromptObserver = new MutationObserver(async (_mutationsList) => {
 });
 
 async function stdinCallback() {
-    console.log("stdinCallback?");
     termState.reading_stdin = true;
     let save = $.terminal.defaults.formatters.pop();
     try {
@@ -186,7 +185,6 @@ async function stdinCallback() {
         setIndent(consoleWrapper.querySelector(".cmd-wrapper"), false);
         await sleep(0);
         let result = await term.read();
-        console.log("result:", result);
         // Add a newline. stdin.readline is supposed to return lines of text
         // terminated by newlines.
         result += "\n";
