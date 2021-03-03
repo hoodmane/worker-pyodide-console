@@ -62,7 +62,7 @@ class InnerExecution {
                 this._stderr_callback
             );
         } catch(e){
-            let err = new Error(format_last_exception(e));
+            let err = new Error(format_last_exception());
             this._validate_syntax.reject(err);
             throw err;
         } finally {
@@ -112,11 +112,8 @@ function waitOnSizeBuffer(){
 function outerWrap(innerWrap){
     function wrapper(...args){
         size_buffer[1] = 0;
-        console.log("calling outer");
         innerWrap(...args);
-        console.log("waiting");
         waitOnSizeBuffer();
-        console.log("finished waiting");
         if(size_buffer[1] === 0){
             self.data_buffer = new Uint8Array(new SharedArrayBuffer(size_buffer[0]));
             set_data_buffer(self.data_buffer);
@@ -124,7 +121,6 @@ function outerWrap(innerWrap){
         }
         let size = size_buffer[0];
         let result = JSON.parse(decoder.decode(data_buffer.slice(0, size)));
-        console.log(size);
         if(size_buffer[1] === 1){
             return result;
         } else if(size_buffer[1] === -1){

@@ -1,5 +1,3 @@
-// import * as db from "https://cdn.jsdelivr.net/npm/lodash.debounce/index.min.js";
-// console.log(db);
 import {Execution, initializePyodide, pyodide, banner, complete} from "./pyodide-main.js";
 
 let term;
@@ -180,18 +178,15 @@ async function stdinCallback() {
     try {
         // Prepend a zeroWidthSpace to insure that the prompt is not empty.
         // This is to allow detection in cmdPromptObserver
-        // setIndent(consoleWrapper.querySelector(".cmd-wrapper"), false);
+        setIndent(consoleWrapper.querySelector(".cmd-wrapper"), false);
         await sleep(0);
-        let prompt = zeroWidthSpace;
-        if(!termState.last_stdout.endsWith("\n")){
-            prompt += termState.last_stdout;
-        }
-        let result = await term.read(prompt);
+        let result = await term.read();
         // Add a newline. stdin.readline is supposed to return lines of text
         // terminated by newlines.
         result += "\n";
         return result;
     } finally {
+        setIndent(consoleWrapper.querySelector(".cmd-wrapper"), true);
         termState.reading_stdin = false;
         // term.read() seems to screw up the "ENTER" handler... 
         // Put it back!
@@ -203,7 +198,6 @@ async function stdinCallback() {
 async function stdoutCallback(text){
     termState.last_stdout = text;
     let [s, newline] = process_stream_write(text);
-    console.log("newline", newline);
     term.echo(s, { newline });
 }
 
@@ -259,7 +253,6 @@ async function submitInner(event, original){
         await sleep(0);
         flushConsole();
         if(result){
-            console.log("result", result);
             term.echo(result);
         }
         if(error){
@@ -372,7 +365,6 @@ const keymap = {
             term.get_command(),
             {
                 finalize: function(div) {
-                    console.log(div);
                     for(let node of div[0].children){
                         node.firstChild.classList.add("cancelled");
                     }
@@ -434,7 +426,6 @@ const termOptions = {
                     if(indentQ){
                         let leadingSpaces = indentQ[0].length;
                         let numSpacesToInsert = 4 - (leadingSpaces % 4);
-                        console.log("numSpacesToInsert",numSpacesToInsert);
                         term.insert(" ".repeat(numSpacesToInsert));
                         suppress_key = true;
                     }

@@ -4,6 +4,10 @@ let InnerExecution;
 let banner;
 let complete;
 
+function sleep(t){
+    return new Promise(resolve => setTimeout(resolve, t));
+}
+
 function promiseHandles(){
     let result;
     let promise = new Promise((resolve, reject) => {
@@ -23,7 +27,6 @@ let buffers = {
 };
 
 function set_data_buffer(buffer){
-    console.log("set data buffer");
     buffers.data_buffer = buffer;
     buffers.data_buffer_promise.resolve();
 }
@@ -42,31 +45,22 @@ function blockingWrapperForAsync(func){
         let fits = bytes.length <= buffers.data_buffer.length;
         buffers.size_buffer[0] = bytes.length;
         buffers.size_buffer[1] = err_sgn * fits;
-        console.log({bytes, fits, size_buffer : buffers.size_buffer});
         if(!fits){
-            console.log("asking for new data buffer");
             buffers.data_buffer_promise = promiseHandles();
-            console.log("...");
+            await sleep(5);
             Atomics.notify(buffers.size_buffer, 1);
             await buffers.data_buffer_promise.promise;
-            console.log("received data buffer", buffers.data_buffer);
         }
         buffers.size_buffer[1] = err_sgn;
         buffers.data_buffer.set(bytes);
+        await sleep(5);
         Atomics.notify(buffers.size_buffer, 1);
     }
     return Comlink.proxy(wrapper);
 }
 
 async function myFetch(arg){
-    console.log("myFetch", arg);
-    try {
-        let result =  await (await fetch(arg)).text();
-        console.log("fetch result:", result);
-        return result;
-    } catch(e){
-        console.log(e);
-    }
+    return await (await fetch(arg)).text();
 }
 
 async function testError(){
@@ -167,7 +161,6 @@ class StdinReader {
     async _read(n){
         try {
             let text = await this._readCallback(n);
-            console.log("text", `$${text}$`);
             // encodeInto apparently doesn't work with SAB...
             let bytes = encoder.encode(text);
             this._size[0] = bytes.length;
