@@ -196,7 +196,6 @@ async function stdinCallback() {
         // term.read() seems to screw up the "ENTER" handler... 
         // Put it back!
         term.keymap("ENTER", enterHandler);
-        setIndent(consoleWrapper.querySelector(".cmd-wrapper"), true);
         term.set_prompt("");
     }
 }
@@ -247,6 +246,7 @@ async function submitInner(event, original){
         term.echo(cmd, {finalize : (node) => node[0].style.marginLeft = "4ch"});
         term.history().append(cmd);
         consoleWrapper.querySelector(".cmd-wrapper").style.display = "none";
+        setIndent(consoleWrapper.querySelector(".cmd-wrapper"), false);
         try {
             result = await execution.result();
         } catch(e){
@@ -259,6 +259,7 @@ async function submitInner(event, original){
         await sleep(0);
         flushConsole();
         if(result){
+            console.log("result", result);
             term.echo(result);
         }
         if(error){
@@ -266,9 +267,9 @@ async function submitInner(event, original){
         }
         // Make sure to show the cmd before updatePrompts, otherwise the prompts
         // might not end up in the right place.
+        await sleep(0);
         let cmdWrapper = consoleWrapper.querySelector(".cmd-wrapper");
         cmdWrapper.style.display = "";
-        await sleep(0);
         termState.current_execution = undefined;
         updatePrompts();
         cmdPromptObserver.observe(consoleWrapper.querySelector(".cmd-prompt"), { childList : true });
@@ -361,18 +362,21 @@ const keymap = {
         }
         if(termState.current_execution){
             termState.current_execution.keyboardInterrupt();
+            return;
         }
         for(let node of promptMargin.querySelectorAll(".input")){
             node.classList.add("cancelled");
         }
         commitPrompts();
         term.echo(
-            inputTagCharacter + term.get_command(),
+            term.get_command(),
             {
                 finalize: function(div) {
+                    console.log(div);
                     for(let node of div[0].children){
                         node.firstChild.classList.add("cancelled");
                     }
+                    div[0].style.marginLeft = "4ch";
                 }
             }
         );
@@ -397,7 +401,9 @@ const termOptions = {
         return await complete(command);
     },
     onAfterEcho : () => {
-        updatePrompts();
+        if(!termState.current_execution){
+            updatePrompts();
+        }
     },
     // scrollBottomOffset : "50vh",
     keymap,

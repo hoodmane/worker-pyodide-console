@@ -4,12 +4,93 @@ let InnerExecution;
 let banner;
 let complete;
 
-let resolveInitialized;
-let initialized = new Promise(resolve => resolveInitialized = resolve);
+function promiseHandles(){
+    let result;
+    let promise = new Promise((resolve, reject) => {
+        result = {resolve, reject};
+    });
+    result.promise = promise;
+    return result;
+}
+
+let { resolve : resolveInitialized, promise : initialized } = promiseHandles();
+
+
+let buffers = {
+    size_buffer : new Int32Array(new SharedArrayBuffer(8)),
+    data_buffer : new Uint8Array(new SharedArrayBuffer(0)),
+    data_buffer_promise : undefined
+};
+
+function set_data_buffer(buffer){
+    console.log("set data buffer");
+    buffers.data_buffer = buffer;
+    buffers.data_buffer_promise.resolve();
+}
+
+function blockingWrapperForAsync(func){
+    async function wrapper(...args){
+        let result;
+        let err_sgn = 1;
+        try {
+            result = await func(...args);
+        } catch(e){
+            result = { name : e.name, message : e.message, stack : e.stack };
+            err_sgn = -1;
+        }
+        let bytes = encoder.encode(JSON.stringify(result));
+        let fits = bytes.length <= buffers.data_buffer.length;
+        buffers.size_buffer[0] = bytes.length;
+        buffers.size_buffer[1] = err_sgn * fits;
+        console.log({bytes, fits, size_buffer : buffers.size_buffer});
+        if(!fits){
+            console.log("asking for new data buffer");
+            buffers.data_buffer_promise = promiseHandles();
+            console.log("...");
+            Atomics.notify(buffers.size_buffer, 1);
+            await buffers.data_buffer_promise.promise;
+            console.log("received data buffer", buffers.data_buffer);
+        }
+        buffers.size_buffer[1] = err_sgn;
+        buffers.data_buffer.set(bytes);
+        Atomics.notify(buffers.size_buffer, 1);
+    }
+    return Comlink.proxy(wrapper);
+}
+
+async function myFetch(arg){
+    console.log("myFetch", arg);
+    try {
+        let result =  await (await fetch(arg)).text();
+        console.log("fetch result:", result);
+        return result;
+    } catch(e){
+        console.log(e);
+    }
+}
+
+async function testError(){
+    function f(){
+        throw new Error("oops!");
+    }
+    f();
+}
+
+const wrappers = {
+    fetch : blockingWrapperForAsync(myFetch),
+    testError : blockingWrapperForAsync(testError)
+};
+// for(let [k, v] of Object.entries(wrappers)){
+//     wrappers[k] = Comlink.proxy(blockingWrapperForAsync(v));
+// }
+wrappers.name_list = Object.getOwnPropertyNames(wrappers);
+
+
 async function initializePyodide(){
     const worker = new Worker("pyodide-worker.js");
     const wrapper = Comlink.wrap(worker);
-    ({pyodide, InnerExecution, banner, complete} = await wrapper());
+    const result = await wrapper(Comlink.transfer(buffers.size_buffer), Comlink.proxy(set_data_buffer), Comlink.proxy(wrappers));
+    ({pyodide, InnerExecution, banner, complete} = result);
     wrapper[Comlink.releaseProxy]();
     banner = "Welcome to the Pyodide terminal emulator 🐍\n" + await banner;
     window.pyodide = pyodide;
@@ -68,6 +149,8 @@ class Execution {
         await this._inner.onStderr(Comlink.proxy(callback));
     }
 }
+window.Execution = Execution;
+
 
 let encoder = new TextEncoder("utf-8");
 class StdinReader {

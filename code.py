@@ -1,13 +1,14 @@
 import ast
 from asyncio import iscoroutine
 from contextlib import redirect_stdout, redirect_stderr, _RedirectStream
-from js import console, sleep
+from js import console, sleep, blockingSleep
 from pyodide._base import CodeRunner
 from pyodide.console import repr_shorten, InteractiveConsole
 from pyodide import JsException
 import __main__
 import time
 
+time.sleep = blockingSleep
 
 class WriteStream:
     """A utility class so we can specify our own handlers for writes to sdout, stderr"""
@@ -81,3 +82,15 @@ async def exec_code(
             if res is not None:
                 res = repr_shorten(res)
             return res
+
+import sys
+import traceback
+def format_last_exception():
+    keep_frames = False
+    kept_frames = 0
+    # Try to trim out stack frames inside our code
+    for (frame, _) in traceback.walk_tb(sys.last_traceback):
+        keep_frames = keep_frames or frame.f_code.co_filename == "<console>"
+        if keep_frames:
+            kept_frames += 1
+    return "".join(traceback.format_exception(sys.last_type, sys.last_value, sys.last_traceback, -kept_frames))
