@@ -53,7 +53,6 @@ const termState =  {
     revsearch_recently_active : false,
     revsearch_before_command : undefined,
 };
-const zeroWidthSpace = "\u200B";
 
 const ps1 = ">>> ", ps2 = "... " /* "\u2219\u2219\u2219" */;
 
@@ -156,20 +155,12 @@ const inputObserver = new MutationObserver(async (_mutationsList) => {
     updatePrompts();
 });
 
-// Hide the prompts during reverse search or during "input", display them again when trimmed.
+// Hide the prompts during reverse search
 const cmdPromptObserver = new MutationObserver(async (_mutationsList) => {
-    let hasPrompt = false;
-    // We don't use the cmd-prompt for anything normal, but reverse search uses
-    // it and also echo_newline.js uses it to store partial lines of text. So
-    // input("prompt text") will stick "prompt text" into the prompt which will
-    // no longer be empty. We insert a zero width space in front of 
-    for(let node of consoleWrapper.querySelector(".cmd-prompt").children){
-        hasPrompt ||= node.innerText.trim() !== "";
-    }
-    setIndent(consoleWrapper.querySelector(".cmd-wrapper"), !hasPrompt);
     // Give keydown handler time to update revsearch_active.
     await sleep(1);
-    if(hasPrompt || termState.revsearch_active){
+    setIndent(consoleWrapper.querySelector(".cmd-wrapper"), !termState.revsearch_active);
+    if(termState.revsearch_active){
         clearPrompts();
     } else {
         updatePrompts();
@@ -180,8 +171,6 @@ async function stdinCallback() {
     termState.reading_stdin = true;
     let save = $.terminal.defaults.formatters.pop();
     try {
-        // Prepend a zeroWidthSpace to insure that the prompt is not empty.
-        // This is to allow detection in cmdPromptObserver
         setIndent(consoleWrapper.querySelector(".cmd-wrapper"), false);
         await sleep(0);
         let result = await term.read();
@@ -374,7 +363,8 @@ const keymap = {
                         node.firstChild.classList.add("cancelled");
                     }
                     div[0].style.marginLeft = "4ch";
-                }
+                },
+                formatters : false
             }
         );
         term.set_command("");
@@ -398,7 +388,9 @@ const termOptions = {
         return await complete(command);
     },
     onAfterEcho : () => {
-        if(!termState.current_execution){
+        if(termState.current_execution){
+            scrollToBottom();
+        } else {
             updatePrompts();
         }
     },
