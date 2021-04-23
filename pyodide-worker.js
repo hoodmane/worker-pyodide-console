@@ -1,7 +1,7 @@
 importScripts("https://cdn.jsdelivr.net/npm/comlink");
-// self.languagePluginUrl = "https://cdn.jsdelivr.net/pyodide/dev/full/pyodide.js";
-self.languagePluginUrl = "./pyodide-build/pyodide.js";
-importScripts(self.languagePluginUrl);
+let indexURL = "./pyodide-build/pyodide.js";
+importScripts(indexURL);
+let pyodideLoaded = loadPyodide({ indexURL });
 let fetchPythonCode = fetch("code.py");
 
 function sleep(t){
@@ -25,6 +25,27 @@ function complete(value){
     proxy.destroy();
     return result;
 }
+
+async function callProxy(px, ...rest){
+    return await px(...rest);
+}
+
+Comlink.transferHandlers.set("EVENT", {
+    canHandle: (obj) => obj instanceof Event,
+    serialize: (ev) => {
+      return [
+        {
+          target: {
+            id: ev.target.id,
+            classList: [...ev.target.classList],
+            clientX: ev.clientX, clientY : ev.clientY,
+          },
+        },
+        [],
+      ];
+    },
+    deserialize: (obj) => obj,
+});
 
 class InnerExecution {
     constructor(code){
@@ -154,7 +175,7 @@ function blockingSleep(t){
 self.blockingSleep = blockingSleep;
 
 let async_wrappers = {};
-async function init(size_buffer, set_data_buffer, asyncWrappers){
+async function init(size_buffer, set_data_buffer, asyncWrappers, windowProxy){
     self.size_buffer = size_buffer;
     self.set_data_buffer = set_data_buffer;
     try {
@@ -166,7 +187,9 @@ async function init(size_buffer, set_data_buffer, asyncWrappers){
     } catch(e) {
         console.error(e);
     }
-    await languagePluginLoader;
+    await pyodideLoaded;
+    pyodide._module.registerComlink(Comlink);
+    self.windowProxy = windowProxy;
 
     pyodide.registerJsModule("async_wrappers", async_wrappers);
     let mainPythonCode = await (await fetchPythonCode).text();

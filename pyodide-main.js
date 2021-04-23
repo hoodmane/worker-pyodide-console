@@ -1,4 +1,5 @@
 import * as Comlink from "https://unpkg.com/comlink/dist/esm/comlink.mjs";
+window.Comlink = Comlink;
 let pyodide;
 let InnerExecution;
 let banner;
@@ -87,13 +88,30 @@ wrappers.name_list = Object.getOwnPropertyNames(wrappers);
 async function initializePyodide(){
     const worker = new Worker("pyodide-worker.js");
     const wrapper = Comlink.wrap(worker);
-    const result = await wrapper(Comlink.transfer(buffers.size_buffer), Comlink.proxy(set_data_buffer), Comlink.proxy(wrappers));
+    const result = await wrapper(Comlink.transfer(buffers.size_buffer), Comlink.proxy(set_data_buffer), Comlink.proxy(wrappers), Comlink.proxy(window));
     ({pyodide, InnerExecution, banner, complete} = result);
     wrapper[Comlink.releaseProxy]();
     banner = "Welcome to the Pyodide terminal emulator 🐍\n" + await banner;
     window.pyodide = pyodide;
     resolveInitialized();
 }
+
+Comlink.transferHandlers.set("EVENT", {
+    canHandle: (obj) => obj instanceof Event,
+    serialize: (ev) => {
+      return [
+        {
+          target: {
+            id: ev.target.id,
+            classList: [...ev.target.classList],
+            clientX: ev.clientX, clientY : ev.clientY,
+          },
+        },
+        [],
+      ];
+    },
+    deserialize: (obj) => obj,
+});
 
 
 class Execution {

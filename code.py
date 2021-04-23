@@ -3,12 +3,15 @@ from asyncio import iscoroutine
 from contextlib import redirect_stdout, redirect_stderr, _RedirectStream
 from js import console, sleep, blockingSleep
 from pyodide._base import CodeRunner
-from pyodide.console import repr_shorten, InteractiveConsole
+from pyodide.console import repr_shorten, _InteractiveConsole as InteractiveConsole
 from pyodide import JsException
 import __main__
 import time
+import sys
+import traceback
 
 time.sleep = blockingSleep
+
 
 class WriteStream:
     """A utility class so we can specify our own handlers for writes to sdout, stderr"""
@@ -26,6 +29,7 @@ class ReadStream:
 
     def readline(self, n=-1):
         return self.read_handler(n)
+
 
 class redirect_stdin(_RedirectStream):
     _stream = "stdin"
@@ -79,8 +83,7 @@ async def exec_code(
                 res = repr_shorten(res)
             return res
 
-import sys
-import traceback
+
 def format_last_exception():
     keep_frames = False
     kept_frames = 0
@@ -89,4 +92,8 @@ def format_last_exception():
         keep_frames = keep_frames or frame.f_code.co_filename == "<console>"
         if keep_frames:
             kept_frames += 1
-    return "".join(traceback.format_exception(sys.last_type, sys.last_value, sys.last_traceback, -kept_frames))
+    return "".join(
+        traceback.format_exception(
+            sys.last_type, sys.last_value, sys.last_traceback, -kept_frames
+        )
+    )
