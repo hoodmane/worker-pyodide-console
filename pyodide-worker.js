@@ -75,19 +75,24 @@ class InnerExecution {
 
     async _start_inner(){
         pyodide._module.setInterruptBuffer(this._interrupt_buffer);
+        let fut = exec_code(
+            this._code, 
+            this._validate_syntax.resolve, 
+            this._stdin_callback,
+            this._stdout_callback, 
+            this._stderr_callback
+        );
         try {
-            return await exec_code(
-                this._code, 
-                this._validate_syntax.resolve, 
-                this._stdin_callback,
-                this._stdout_callback, 
-                this._stderr_callback
-            );
-        } catch(e){
-            let err = new Error(format_last_exception());
-            this._validate_syntax.reject(err);
-            throw err;
+            let [status, value] = await fut;
+            if(status){
+                // It was an error
+                let err = new Error(value);
+                this._validate_syntax.reject(err);        
+                throw err;
+            }
+            return value;
         } finally {
+            fut.destroy();
             pyodide._module.setInterruptBuffer();
         }
     }
@@ -196,7 +201,7 @@ async function init(size_buffer, set_data_buffer, asyncWrappers, windowProxy){
     let mainPythonCode = await (await fetchPythonCode).text();
     let namespace = pyodide.pyimport("dict")();
     pyodide.pyodide_py.eval_code(mainPythonCode, namespace);
-    for(let name of ["exec_code", "format_last_exception", "BANNER", "pycomplete"]){
+    for(let name of ["exec_code", "BANNER", "pycomplete"]){
         self[name] = namespace.get(name);
     }
     namespace.destroy();

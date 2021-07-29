@@ -1,6 +1,6 @@
 from js import blockingSleep
-from pyodide.console import BANNER, PyodideConsole
-from pyodide import JsException
+from pyodide.console import BANNER, PyodideConsole, repr_shorten
+from pyodide import to_js
 import __main__
 import time
 
@@ -19,8 +19,13 @@ async def exec_code(
     pyconsole.stdin_callback = stdin_callback
     pyconsole.stdout_callback = stdout_callback
     pyconsole.stderr_callback = stderr_callback
-    fut = pyconsole.runsource(code)
+    fut = pyconsole.runsource(code + "\n\n")
     if fut.syntax_check == "syntax-error":
-        fut.result() # cause error to be raised
+        return to_js([-1, fut.formatted_error])
     syntax_check_passed()
-    return await fut
+    try:
+        result = await fut
+        repr_result = repr_shorten(result) if result is not None else None
+        return to_js([0, repr_result])
+    except Exception:
+        return to_js([-1, fut.formatted_error])
