@@ -1,4 +1,4 @@
-import {Execution, initializePyodide, pyodide, banner, complete} from "./pyodide-main.js";
+import {Execution, initializePyodide, pyodide, BANNER, complete} from "./pyodide-main.js";
 
 let term;
 export {term, pyodide, init};
@@ -66,7 +66,7 @@ async function init() {
         (command) => {},
         termOptions  
     );
-    term.echo(banner, {formatters : false});
+    term.echo(BANNER, {formatters : false});
     $.terminal.defaults.formatters.push(
         $.terminal.prism.bind(null, 'python')
     );
@@ -252,7 +252,7 @@ async function submitInner(event, original){
         await sleep(0);
         flushConsole();
         if(result){
-            term.echo(prism_format(result));
+            term.echo(prism_format(result.toString()));
         }
         if(error){
             term.error(error.message);

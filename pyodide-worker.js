@@ -1,6 +1,7 @@
 importScripts("https://cdn.jsdelivr.net/npm/comlink");
-let indexURL = "./pyodide-build/pyodide.js";
-importScripts(indexURL);
+// let indexURL = "./pyodide.js";
+let indexURL = "https://cdn.jsdelivr.net/pyodide/v0.18.0a1/full/";
+importScripts(indexURL + "pyodide.js");
 let pyodideLoaded = loadPyodide({ indexURL });
 let fetchPythonCode = fetch("code.py");
 
@@ -73,7 +74,7 @@ class InnerExecution {
     }
 
     async _start_inner(){
-        pyodide.setInterruptBuffer(this._interrupt_buffer);
+        pyodide._module.setInterruptBuffer(this._interrupt_buffer);
         try {
             return await exec_code(
                 this._code, 
@@ -87,7 +88,7 @@ class InnerExecution {
             this._validate_syntax.reject(err);
             throw err;
         } finally {
-            pyodide.setInterruptBuffer();
+            pyodide._module.setInterruptBuffer();
         }
     }
     
@@ -169,7 +170,7 @@ let blockingSleepBuffer = new Int32Array(new SharedArrayBuffer(4));
 function blockingSleep(t){
     for(let i = 0; i < t * 20; i++){
         Atomics.wait(blockingSleepBuffer, 0, 0, 50);
-        pyodide.checkInterrupt();
+        // pyodide.checkInterrupt();
     }
 }
 self.blockingSleep = blockingSleep;
@@ -187,15 +188,15 @@ async function init(size_buffer, set_data_buffer, asyncWrappers, windowProxy){
     } catch(e) {
         console.error(e);
     }
-    await pyodideLoaded;
-    pyodide._module.registerComlink(Comlink);
+    self.pyodide = await pyodideLoaded;
+    pyodide.registerComlink(Comlink);
     self.windowProxy = windowProxy;
 
     pyodide.registerJsModule("async_wrappers", async_wrappers);
     let mainPythonCode = await (await fetchPythonCode).text();
     let namespace = pyodide.pyimport("dict")();
     pyodide.pyodide_py.eval_code(mainPythonCode, namespace);
-    for(let name of ["exec_code", "format_last_exception", "banner", "pycomplete"]){
+    for(let name of ["exec_code", "format_last_exception", "BANNER", "pycomplete"]){
         self[name] = namespace.get(name);
     }
     namespace.destroy();
@@ -203,7 +204,7 @@ async function init(size_buffer, set_data_buffer, asyncWrappers, windowProxy){
     return Comlink.proxy({ 
         InnerExecution, 
         pyodide,
-        banner,
+        BANNER,
         complete,
     });
 }

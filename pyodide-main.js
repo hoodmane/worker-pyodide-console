@@ -2,7 +2,7 @@ import * as Comlink from "https://unpkg.com/comlink/dist/esm/comlink.mjs";
 window.Comlink = Comlink;
 let pyodide;
 let InnerExecution;
-let banner;
+let BANNER;
 let complete;
 
 function sleep(t){
@@ -89,9 +89,9 @@ async function initializePyodide(){
     const worker = new Worker("pyodide-worker.js");
     const wrapper = Comlink.wrap(worker);
     const result = await wrapper(Comlink.transfer(buffers.size_buffer), Comlink.proxy(set_data_buffer), Comlink.proxy(wrappers), Comlink.proxy(window));
-    ({pyodide, InnerExecution, banner, complete} = result);
+    ({pyodide, InnerExecution, BANNER, complete} = result);
     wrapper[Comlink.releaseProxy]();
-    banner = "Welcome to the Pyodide terminal emulator 🐍\n" + await banner;
+    BANNER = "Welcome to the Pyodide terminal emulator 🐍\n" + await BANNER;
     window.pyodide = pyodide;
     resolveInitialized();
 }
@@ -167,4 +167,4 @@ class Execution {
 }
 window.Execution = Execution;
 
-export {Execution, pyodide, banner, complete, initializePyodide};
+export {Execution, pyodide, BANNER, complete, initializePyodide};
