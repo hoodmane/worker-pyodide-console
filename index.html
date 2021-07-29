@@ -1,52 +1,58 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
   <head>
-    <meta charset="UTF-8">
+    <meta charset="UTF-8" />
     <title>Pyodide Webworker Console</title>
     <script src="https://cdn.jsdelivr.net/npm/jquery"></script>
     <script src="https://cdn.jsdelivr.net/npm/jquery.terminal/js/jquery.terminal.min.js"></script>
-    <link href="https://cdn.jsdelivr.net/npm/jquery.terminal/css/jquery.terminal.min.css" rel="stylesheet"/>
+    <link
+      href="https://cdn.jsdelivr.net/npm/jquery.terminal/css/jquery.terminal.min.css"
+      rel="stylesheet"
+    />
 
-    <link href="https://cdn.jsdelivr.net/npm/prismjs@1.8.1/themes/prism.css" rel="stylesheet"/>
+    <link
+      href="https://cdn.jsdelivr.net/npm/prismjs@1.8.1/themes/prism.css"
+      rel="stylesheet"
+    />
     <script src="https://cdn.jsdelivr.net/npm/prismjs@1.8.1/prism.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/prismjs@1.8.1/components/prism-python.min.js"></script>
 
     <script src="https://cdn.jsdelivr.net/npm/jquery.terminal/js/prism.js"></script>
     <style>
       :root {
-        --size: 1.5; 
+        --size: 1.5;
         --background: transparent;
-        --color : #bbb;
+        --color: #bbb;
       }
       .cancelled {
-        color : #777 !important;
+        color: #777 !important;
       }
       body {
-        background: black; 
+        background: black;
         margin: 0;
       }
       .cmd-wrapper {
         margin-left: 4ch;
       }
-      .terminal { 
+      .terminal {
         /* 20pt is the total amount of vertical padding */
-        min-height: calc(100vh - 20pt); 
+        min-height: calc(100vh - 20pt);
         flex-grow: 1;
         margin-left: -4ch;
         padding: 0;
         padding-bottom: 50vh;
       }
       .console-wrapper {
-        display: flex; 
+        display: flex;
         flex-direction: row;
         padding: 10pt;
       }
       .cmd-line {
-        margin-left : -4ch;
+        margin-left: -4ch;
       }
       .console-prompt-margin {
         z-index: -1;
-        width: 4ch; 
+        width: 4ch;
         user-select: none;
         position: unset;
         display: flex;
@@ -56,13 +62,12 @@
   </head>
   <body>
     <div class="console-wrapper">
-      <div class="console-prompt-margin cmd">
-      </div>
+      <div class="console-prompt-margin cmd"></div>
       <div class="terminal"></div>
     </div>
     <script type="module">
-      import { term, pyodide, init as initInner} from "./index.js";
-      async function init(){
+      import { term, pyodide, init as initInner } from "./index.js";
+      async function init() {
         await initInner();
         window.pyodide = pyodide;
         window.term = term;
