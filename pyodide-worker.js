@@ -1,6 +1,6 @@
 importScripts("https://cdn.jsdelivr.net/npm/comlink");
 // let indexURL = "./pyodide.js";
-let indexURL = "https://cdn.jsdelivr.net/pyodide/v0.18.0a1/full/";
+let indexURL = "https://cdn.jsdelivr.net/pyodide/dev/full/";
 importScripts(indexURL + "pyodide.js");
 let pyodideLoaded = loadPyodide({ indexURL });
 let fetchPythonCode = fetch("code.py");
@@ -177,7 +177,7 @@ let blockingSleepBuffer = new Int32Array(new SharedArrayBuffer(4));
 function blockingSleep(t) {
   for (let i = 0; i < t * 20; i++) {
     Atomics.wait(blockingSleepBuffer, 0, 0, 50);
-    // pyodide.checkInterrupt();
+    pyodide.checkInterrupt();
   }
 }
 self.blockingSleep = blockingSleep;
