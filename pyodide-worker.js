@@ -1,6 +1,6 @@
-importScripts("https://cdn.jsdelivr.net/npm/comlink");
+importScripts("https://cdn.jsdelivr.net/npm/synclink");
 // let indexURL = "./pyodide.js";
-let indexURL = "https://cdn.jsdelivr.net/pyodide/dev/full/";
+let indexURL = "https://cdn.jsdelivr.net/pyodide/v0.19.1/full/";
 importScripts(indexURL + "pyodide.js");
 let pyodideLoaded = loadPyodide({ indexURL });
 
@@ -28,7 +28,7 @@ function promiseHandles() {
   return result;
 }
 
-// Comlink proxy and PyProxy don't get along as of yet so need a wrapper
+// Synclink proxy and PyProxy don't get along as of yet so need a wrapper
 function complete(value) {
   let proxy = pycomplete(value);
   let result = proxy.toJs();
@@ -40,7 +40,7 @@ async function callProxy(px, ...rest) {
   return await px(...rest);
 }
 
-Comlink.transferHandlers.set("EVENT", {
+Synclink.transferHandlers.set("EVENT", {
   canHandle: (obj) => obj instanceof Event,
   serialize: (ev) => {
     return [
@@ -66,7 +66,7 @@ class InnerExecution {
     this._result = promiseHandles();
     this._result.promise.finally(() => {
       for (let proxy of this.proxies) {
-        proxy[Comlink.releaseProxy]();
+        proxy[Synclink.releaseProxy]();
       }
     });
     this.proxies = [];
@@ -78,7 +78,7 @@ class InnerExecution {
   }
 
   interrupt_buffer() {
-    return Comlink.transfer(this._interrupt_buffer);
+    return Synclink.transfer(this._interrupt_buffer);
   }
 
   start() {
@@ -206,7 +206,7 @@ async function init(size_buffer, set_data_buffer, asyncWrappers, windowProxy) {
     console.error(e);
   }
   self.pyodide = await pyodideLoaded;
-  pyodide.registerComlink(Comlink);
+  pyodide.registerComlink(Synclink);
   self.windowProxy = windowProxy;
 
   pyodide.registerJsModule("async_wrappers", async_wrappers);
@@ -215,11 +215,11 @@ async function init(size_buffer, set_data_buffer, asyncWrappers, windowProxy) {
   for (let name of ["exec_code", "BANNER", "pycomplete"]) {
     self[name] = console_main[name];
   }
-  return Comlink.proxy({
+  return Synclink.proxy({
     InnerExecution,
     pyodide,
     BANNER,
     complete,
   });
 }
-Comlink.expose(init);
+Synclink.expose(init);

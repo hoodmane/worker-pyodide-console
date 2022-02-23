@@ -1,5 +1,6 @@
-import * as Comlink from "https://unpkg.com/comlink/dist/esm/comlink.mjs";
-window.Comlink = Comlink;
+import * as Synclink from "https://unpkg.com/synclink@0.1.0/dist/esm/synclink.mjs";
+
+window.Synclink = Synclink;
 let pyodide;
 let InnerExecution;
 let BANNER;
@@ -63,7 +64,7 @@ function blockingWrapperForAsync(func) {
       console.warn(e);
     }
   }
-  return Comlink.proxy(wrapper);
+  return Synclink.proxy(wrapper);
 }
 
 async function myFetch(arg) {
@@ -88,21 +89,21 @@ wrappers.name_list = Object.getOwnPropertyNames(wrappers);
 
 async function initializePyodide() {
   const worker = new Worker("pyodide-worker.js");
-  const wrapper = Comlink.wrap(worker);
+  const wrapper = Synclink.wrap(worker);
   const result = await wrapper(
-    Comlink.transfer(buffers.size_buffer),
-    Comlink.proxy(set_data_buffer),
-    Comlink.proxy(wrappers),
-    Comlink.proxy(window)
+    Synclink.transfer(buffers.size_buffer),
+    Synclink.proxy(set_data_buffer),
+    Synclink.proxy(wrappers),
+    Synclink.proxy(window)
   );
   ({ pyodide, InnerExecution, BANNER, complete } = result);
-  wrapper[Comlink.releaseProxy]();
+  wrapper[Synclink.releaseProxy]();
   BANNER = "Welcome to the Pyodide terminal emulator 🐍\n" + (await BANNER);
   window.pyodide = pyodide;
   resolveInitialized();
 }
 
-Comlink.transferHandlers.set("EVENT", {
+Synclink.transferHandlers.set("EVENT", {
   canHandle: (obj) => obj instanceof Event,
   serialize: (ev) => {
     return [
@@ -165,7 +166,7 @@ class Execution {
         "Cannot set standard out callback after starting the execution."
       );
     }
-    await this._inner.onStdout(Comlink.proxy(callback));
+    await this._inner.onStdout(Synclink.proxy(callback));
   }
 
   async onStderr(callback) {
@@ -174,7 +175,7 @@ class Execution {
         "Cannot set standard error callback after starting the execution."
       );
     }
-    await this._inner.onStderr(Comlink.proxy(callback));
+    await this._inner.onStderr(Synclink.proxy(callback));
   }
 }
 window.Execution = Execution;
