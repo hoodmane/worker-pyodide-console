@@ -3,7 +3,17 @@ importScripts("https://cdn.jsdelivr.net/npm/comlink");
 let indexURL = "https://cdn.jsdelivr.net/pyodide/dev/full/";
 importScripts(indexURL + "pyodide.js");
 let pyodideLoaded = loadPyodide({ indexURL });
-let fetchPythonCode = fetch("code.py");
+
+async function fetch_and_install(url) {
+  const fetch_promise = fetch(url).then(async resp => new Uint8Array(await resp.arrayBuffer()));
+  await pyodideLoaded;
+  const buffer = await fetch_promise;
+  const name = url.substring(url.lastIndexOf('/') + 1);
+  const stream = pyodide.FS.open(name, 'w+');
+  pyodide.FS.write(stream, buffer, 0, buffer.byteLength, 0, true);
+  pyodide.FS.close(stream);
+}
+const pycode_promise = fetch_and_install("console_main.py");
 
 function sleep(t) {
   return new Promise((resolve) => setTimeout(resolve, t));
@@ -200,14 +210,11 @@ async function init(size_buffer, set_data_buffer, asyncWrappers, windowProxy) {
   self.windowProxy = windowProxy;
 
   pyodide.registerJsModule("async_wrappers", async_wrappers);
-  let mainPythonCode = await (await fetchPythonCode).text();
-  let namespace = pyodide.globals.get("dict")();
-  pyodide.pyodide_py.eval_code(mainPythonCode, namespace);
+  await pycode_promise;
+  const console_main = pyodide.pyimport("console_main");
   for (let name of ["exec_code", "BANNER", "pycomplete"]) {
-    self[name] = namespace.get(name);
+    self[name] = console_main[name];
   }
-  namespace.destroy();
-
   return Comlink.proxy({
     InnerExecution,
     pyodide,
