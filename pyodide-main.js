@@ -1,4 +1,4 @@
-import * as Synclink from "https://unpkg.com/synclink@0.1.0/dist/esm/synclink.mjs";
+import * as Synclink from "./synclink.mjs";
 
 window.Synclink = Synclink;
 let pyodide;
@@ -21,79 +21,10 @@ function promiseHandles() {
 
 let { resolve: resolveInitialized, promise: initialized } = promiseHandles();
 
-let buffers = {
-  size_buffer: new Int32Array(new SharedArrayBuffer(8)),
-  data_buffer: new Uint8Array(new SharedArrayBuffer(0)),
-  data_buffer_promise: undefined,
-};
-
-function set_data_buffer(buffer) {
-  buffers.data_buffer = buffer;
-  buffers.data_buffer_promise.resolve();
-}
-
-let encoder = new TextEncoder("utf-8");
-function blockingWrapperForAsync(func) {
-  async function wrapper(...args) {
-    try {
-      let result;
-      let err_sgn = 1;
-      try {
-        result = await func(...args);
-      } catch (e) {
-        result = { name: e.name, message: e.message, stack: e.stack };
-        err_sgn = -1;
-      }
-      let bytes = encoder.encode(JSON.stringify(result));
-      let fits = bytes.length <= buffers.data_buffer.length;
-      Atomics.store(buffers.size_buffer, 0, bytes.length);
-      Atomics.store(buffers.size_buffer, 1, err_sgn * fits);
-      if (!fits) {
-        buffers.data_buffer_promise = promiseHandles();
-        Atomics.notify(buffers.size_buffer, 1);
-        await buffers.data_buffer_promise.promise;
-      }
-      buffers.data_buffer.set(bytes);
-      Atomics.store(buffers.size_buffer, 1, err_sgn);
-      // Does this lead to race conditions on data_buffer?
-      Atomics.notify(buffers.size_buffer, 1);
-    } catch (e) {
-      console.warn(
-        `Error occurred in blockingWrapperForAsync for ${func.name}:`
-      );
-      console.warn(e);
-    }
-  }
-  return Synclink.proxy(wrapper);
-}
-
-async function myFetch(arg) {
-  return await (await fetch(arg)).text();
-}
-
-async function testError() {
-  function f() {
-    throw new Error("oops!");
-  }
-  f();
-}
-
-const wrappers = {
-  fetch: myFetch,
-  testError: testError,
-};
-for (let [k, v] of Object.entries(wrappers)) {
-  wrappers[k] = blockingWrapperForAsync(v);
-}
-wrappers.name_list = Object.getOwnPropertyNames(wrappers);
-
 async function initializePyodide() {
   const worker = new Worker("pyodide-worker.js");
   const wrapper = Synclink.wrap(worker);
   const result = await wrapper(
-    Synclink.transfer(buffers.size_buffer),
-    Synclink.proxy(set_data_buffer),
-    Synclink.proxy(wrappers),
     Synclink.proxy(window)
   );
   ({ pyodide, InnerExecution, BANNER, complete } = result);
@@ -136,7 +67,7 @@ class Execution {
 
   start() {
     this._started = true;
-    this._inner.start();
+    this._inner.start().schedule_async();
   }
 
   keyboardInterrupt() {
@@ -157,7 +88,7 @@ class Execution {
         "Cannot set standard in callback after starting the execution."
       );
     }
-    await this._inner.setStdin(blockingWrapperForAsync(callback));
+    await this._inner.setStdin(Synclink.proxy(callback));
   }
 
   async onStdout(callback) {

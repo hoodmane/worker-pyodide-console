@@ -1,12 +1,9 @@
-from js import blockingSleep
 from pyodide.console import BANNER, PyodideConsole, repr_shorten
 from pyodide import to_js
 import __main__
 import time
 
 __all__ = ["BANNER", "pycomplete", "exec_code"]
-
-time.sleep = blockingSleep
 
 pyconsole = PyodideConsole(globals=__main__.__dict__, filename="<console>")
 

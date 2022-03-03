@@ -1,5 +1,4 @@
 importScripts("https://cdn.jsdelivr.net/npm/synclink");
-// let indexURL = "./pyodide.js";
 let indexURL = "https://cdn.jsdelivr.net/pyodide/v0.19.1/full/";
 importScripts(indexURL + "pyodide.js");
 let pyodideLoaded = loadPyodide({ indexURL });
@@ -120,91 +119,24 @@ class InnerExecution {
 
   async setStdin(outer_stdin_reader) {
     this.proxies.push(outer_stdin_reader);
-    this._stdin_callback = outerWrap(outer_stdin_reader);
+    this._stdin_callback = () => {
+      return outer_stdin_reader().syncify();
+    }
   }
 
   onStdout(callback) {
     this.proxies.push(callback);
-    this._stdout_callback = (msg) => callback(msg);
+    this._stdout_callback = (msg) => callback(msg).syncify();
   }
 
   onStderr(callback) {
     this.proxies.push(callback);
-    this._stderr_callback = (msg) => callback(msg);
+    this._stderr_callback = (msg) => callback(msg).syncify();
   }
 }
-
-function waitOnSizeBuffer() {
-  while (true) {
-    let result = Atomics.wait(size_buffer, 1, 0, 50);
-    switch (result) {
-      case "ok":
-      case "not-equal":
-        return;
-      case "timed-out":
-        pyodide.checkInterrupt();
-        break;
-      default:
-        throw new Error("Unreachable");
-    }
-  }
-}
-
-function outerWrap(innerWrap) {
-  function wrapper(...args) {
-    size_buffer[1] = 0;
-    innerWrap(...args);
-    waitOnSizeBuffer();
-    if (size_buffer[1] === 0) {
-      self.data_buffer = new Uint8Array(new SharedArrayBuffer(size_buffer[0]));
-      set_data_buffer(self.data_buffer);
-      waitOnSizeBuffer();
-    }
-    let size = size_buffer[0];
-    let result;
-    try {
-      result = JSON.parse(decoder.decode(data_buffer.slice(0, size)));
-    } catch (e) {
-      console.log("data_buffer", data_buffer);
-      console.log("Atomics.load:", Atomics.load(data_buffer, 0));
-    }
-    if (size_buffer[1] === 1) {
-      return result;
-    } else if (size_buffer[1] === -1) {
-      let e = new Error();
-      e.name = result.name;
-      e.message = result.message;
-      e.orig_stack = result.stack;
-      throw e;
-    }
-  }
-  return wrapper;
-}
-
-let decoder = new TextDecoder("utf-8");
-
-let blockingSleepBuffer = new Int32Array(new SharedArrayBuffer(4));
-function blockingSleep(t) {
-  for (let i = 0; i < t * 20; i++) {
-    Atomics.wait(blockingSleepBuffer, 0, 0, 50);
-    pyodide.checkInterrupt();
-  }
-}
-self.blockingSleep = blockingSleep;
 
 let async_wrappers = {};
-async function init(size_buffer, set_data_buffer, asyncWrappers, windowProxy) {
-  self.size_buffer = size_buffer;
-  self.set_data_buffer = set_data_buffer;
-  try {
-    let key_list = await asyncWrappers.name_list;
-    for (let key of key_list) {
-      let value = await asyncWrappers[key];
-      async_wrappers[key] = outerWrap(value);
-    }
-  } catch (e) {
-    console.error(e);
-  }
+async function init(windowProxy) {
   self.pyodide = await pyodideLoaded;
   pyodide.registerComlink(Synclink);
   self.windowProxy = windowProxy;
