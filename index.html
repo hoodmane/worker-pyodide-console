@@ -4,11 +4,19 @@
     <meta charset="UTF-8" />
     <title>Pyodide Webworker Console</title>
     <script src="https://cdn.jsdelivr.net/npm/jquery"></script>
-    <script src="https://cdn.jsdelivr.net/npm/jquery.terminal/js/jquery.terminal.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jquery.terminal/js/jquery.terminal.js"></script>
     <link
       href="https://cdn.jsdelivr.net/npm/jquery.terminal/css/jquery.terminal.min.css"
       rel="stylesheet"
     />
+
+    <script type="importmap">
+      {
+        "imports": {
+          "safari-14-idb-fix": "https://unpkg.com/safari-14-idb-fix@3.0.0/dist/index.js"
+        }
+      }
+    </script>
 
     <link
       href="https://cdn.jsdelivr.net/npm/prismjs@1.8.1/themes/prism.css"

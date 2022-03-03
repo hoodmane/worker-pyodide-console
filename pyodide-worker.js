@@ -1,6 +1,9 @@
-importScripts("https://cdn.jsdelivr.net/npm/synclink");
 let indexURL = "https://cdn.jsdelivr.net/pyodide/v0.19.1/full/";
-importScripts(indexURL + "pyodide.js");
+importScripts(
+  "https://cdn.jsdelivr.net/npm/synclink",
+  indexURL + "pyodide.js",
+  "nativefs_pyodide_thread.js"
+);
 let pyodideLoaded = loadPyodide({ indexURL });
 
 async function fetch_and_install(url) {
@@ -137,13 +140,26 @@ class InnerExecution {
   }
 }
 
-let async_wrappers = {};
-async function init(windowProxy) {
+function initNativeFs(nativeFSHelpers) {
+  async function mount_native_fs(path) {
+    let handle = await nativeFSHelpers.openWorkingDirectory();
+    if (!handle) {
+      handle = await nativeFSHelpers.setWorkingDirectory();
+    }
+    let os = pyodide.pyimport("os");
+    os.makedirs.callKwargs(path, { exist_ok: true });
+    pyodide.FS.mount(pyodide.FS.filesystems.NATIVEFS, { handle }, path);
+  }
+  addNativeFS(pyodide, nativeFSHelpers);
+  pyodide.registerJsModule("native_fs", { mount_native_fs });
+}
+
+async function init(windowProxy, nativeFSHelpers) {
   self.pyodide = await pyodideLoaded;
   pyodide.registerComlink(Synclink);
   self.windowProxy = windowProxy;
+  initNativeFs(nativeFSHelpers);
 
-  pyodide.registerJsModule("async_wrappers", async_wrappers);
   await pycode_promise;
   const console_main = pyodide.pyimport("console_main");
   for (let name of ["exec_code", "BANNER", "pycomplete"]) {

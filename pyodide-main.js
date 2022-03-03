@@ -1,4 +1,5 @@
 import * as Synclink from "https://unpkg.com/synclink@0.1.0/dist/esm/synclink.mjs";
+import { nativeFSHelpers } from "./nativefs_main_thread.js";
 
 window.Synclink = Synclink;
 let pyodide;
@@ -24,7 +25,10 @@ let { resolve: resolveInitialized, promise: initialized } = promiseHandles();
 async function initializePyodide() {
   const worker = new Worker("pyodide-worker.js");
   const wrapper = Synclink.wrap(worker);
-  const result = await wrapper(Synclink.proxy(window));
+  const result = await wrapper(
+    Synclink.proxy(window),
+    Synclink.proxy(nativeFSHelpers)
+  );
   ({ pyodide, InnerExecution, BANNER, complete } = result);
   wrapper[Synclink.releaseProxy]();
   BANNER = "Welcome to the Pyodide terminal emulator 🐍\n" + (await BANNER);
