@@ -401,7 +401,8 @@ const termOptions = {
   greetings: false,
   completionEscape: false,
   completion: async function (command) {
-    return await complete(command);
+    const result = await complete(command);
+    return result[0];
   },
   // onAfterEcho : async () => {
   //     if(!termState.current_execution){
