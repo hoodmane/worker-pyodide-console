@@ -1,4 +1,4 @@
-import * as Synclink from "./synclink.mjs";
+import * as Synclink from "https://unpkg.com/synclink@0.1.0/dist/esm/synclink.mjs";
 
 window.Synclink = Synclink;
 let pyodide;
