@@ -13,14 +13,15 @@ def pycomplete(source):
 
 
 async def exec_code(
-    code, syntax_check_passed, stdin_callback, stdout_callback, stderr_callback
+    code : str, syntax_check_passed, stdin_callback, stdout_callback, stderr_callback
 ):
     pyconsole.stdin_callback = stdin_callback
     pyconsole.stdout_callback = stdout_callback
     pyconsole.stderr_callback = stderr_callback
-    fut = pyconsole.runsource(code + "\n\n")
-    if fut.syntax_check == "syntax-error":
-        return to_js([-1, fut.formatted_error])
+    for line in code.splitlines():
+        fut = pyconsole.push(line)
+        if fut.syntax_check == "syntax-error":
+            return to_js([-1, fut.formatted_error])
     syntax_check_passed()
     try:
         result = await fut
