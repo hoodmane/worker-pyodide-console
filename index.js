@@ -375,8 +375,8 @@ const keymap = {
     term.echo(term.get_command(), {
       finalize: function (div) {
         for (let node of div[0].children) {
-          if(node.firstChild){
-              node.firstChild.classList.add("cancelled");
+          if (node.firstChild) {
+            node.firstChild.classList.add("cancelled");
           }
         }
         div[0].style.marginLeft = "4ch";

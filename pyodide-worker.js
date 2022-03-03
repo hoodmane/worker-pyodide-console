@@ -4,11 +4,13 @@ importScripts(indexURL + "pyodide.js");
 let pyodideLoaded = loadPyodide({ indexURL });
 
 async function fetch_and_install(url) {
-  const fetch_promise = fetch(url).then(async resp => new Uint8Array(await resp.arrayBuffer()));
+  const fetch_promise = fetch(url).then(
+    async (resp) => new Uint8Array(await resp.arrayBuffer())
+  );
   await pyodideLoaded;
   const buffer = await fetch_promise;
-  const name = url.substring(url.lastIndexOf('/') + 1);
-  const stream = pyodide.FS.open(name, 'w+');
+  const name = url.substring(url.lastIndexOf("/") + 1);
+  const stream = pyodide.FS.open(name, "w+");
   pyodide.FS.write(stream, buffer, 0, buffer.byteLength, 0, true);
   pyodide.FS.close(stream);
 }
@@ -121,7 +123,7 @@ class InnerExecution {
     this.proxies.push(outer_stdin_reader);
     this._stdin_callback = () => {
       return outer_stdin_reader().syncify();
-    }
+    };
   }
 
   onStdout(callback) {
